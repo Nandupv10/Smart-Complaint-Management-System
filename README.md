@@ -1,30 +1,56 @@
-# Smart Complaint Management System
+# 🧾 Smart Complaint Management System
 
-## Software Engineering Mini-Project – Phase 1
+> A centralized web-based platform for submitting, managing, tracking, and resolving complaints.
 
-## Team Members
+## 📌 About the Project
 
-- Narina Jeevan Naga Deep (PES1UG24CS293)
-- M Nikhil Sai (PES1UG24CS253)
-- Nandakishore PV (PES1UG24CS291)
-- Nallamalli Kanaka Mani Sai Akhil (PES1UG24CS290)
+The **Smart Complaint Management System (SCMS)** is designed to simplify complaint handling through a centralized platform.
 
-## Deliverables
+Users can register, submit complaints, track their status, and provide feedback after resolution. Administrators can view, categorize, assign, update, and resolve complaints.
 
-The following documents contain the Part-1 deliverables of the Smart Complaint Management System:
+## ✨ Key Features
 
-1. [Problem Statement Analysis](./01_Problem_Statement_Analysis.docx)
+- 🔐 User Registration & Login
+- 📝 Complaint Submission
+- 🆔 Unique Complaint ID Generation
+- 📊 Complaint Status Tracking
+- 🗂️ Complaint Categorization & Assignment
+- 🔄 Complaint Status Updates & Resolution
+- ⭐ Feedback & Rating
+- 🛡️ Authentication, Authorization & Security
+- 📋 Audit Logging
 
-2. [Software Requirements Specification (SRS)](./02_Software_Requirements_Specification.docx)
+## 🏗️ Architecture
 
-3. [Functional Requirements & Validation](./03_Functional_Requirements%20%26%20Validation_Functional_Requirements.docx)
+The system follows a **Layered / Three-Tier Architecture**:
 
-4. [Requirements Traceability Matrix](./04_Requirements_Traceability_Matrix.docx)
+`React Web Client → Node.js / Express API → MySQL Database`
 
-5. [Actor Identification](./05_Actor_Identification.docx)
+## 📚 Part-1 Deliverables
 
-6. [Use Case Model](./06_Use_Case_Model.docx)
+This repository contains the Software Engineering Mini-Project Part-1 deliverables:
 
-7. [Use Case Diagram](./07_Use_Case_Diagram.docx)
+- Software Requirements Specification (SRS)
+- Functional & Non-Functional Requirements
+- Requirements Traceability Matrix
+- Actor Identification
+- Use Case Model
+- UML Use Case Diagram
+- Test Plan
+- Security Validation
+- Software Architecture & Design Specification
+- UML Sequence Diagrams
+- API Design & Error Handling
+- Test Cases
 
-8. [Test Plan, Architecture, Design and Test Cases](./08_Test_Plan_Architecture_Design_and_Test_Cases.docx)
+## 👥 Team Members
+
+- **Narina Jeevan Naga Deep**
+- **M Nikhil Sai**
+- **Nandakishore PV**
+- **N Kanaka Mani Sai Akhil**
+
+## 🎓 Project
+
+**Software Engineering Mini-Project — Part 1**  
+**Department of Computer Science and Engineering, PES University**
