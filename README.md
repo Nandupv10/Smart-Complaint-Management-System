@@ -1,6 +1,6 @@
 # Smart Complaint Management System
 
-## Software Engineering Mini-Project – Part 1
+## Software Engineering Mini-Project – Phase 1
 
 ## Team Members
 
