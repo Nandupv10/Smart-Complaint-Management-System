@@ -4,7 +4,7 @@ Software Engineering Mini-Project – Part 1
 
 ## Team Members
 
-- Narina Jeevan Naga Deep 
+- Narina Jeevan Naga Deep
 - M Nikhil Sai
 - Nandakishore PV
 - N Kanaka Mani Sai Akhil
@@ -16,7 +16,3 @@ This repository contains the Part-1 deliverables:
 - Test Plan
 - Software Architecture & Design Specification
 - Test Cases
-
-## Document
-
-[SCMS Part-1 Deliverables](./SCMS_Part1_Deliverables.pdf)
