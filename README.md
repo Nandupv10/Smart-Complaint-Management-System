@@ -20,11 +20,6 @@ Users can register, submit complaints, track their status, and provide feedback 
 - 🛡️ Authentication, Authorization & Security
 - 📋 Audit Logging
 
-## 🏗️ Architecture
-
-The system follows a **Layered / Three-Tier Architecture**:
-
-`React Web Client → Node.js / Express API → MySQL Database`
 
 ## 📚 Part-1 Deliverables
 
