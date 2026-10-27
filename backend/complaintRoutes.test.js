@@ -1,54 +1,15 @@
-
-const assert = require('node:assert/strict');
-const { runInNewContext } = require('node:vm');
+﻿const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const express = require('express');
+const router = require('./complaintRoutes');
 
-function loadComplaintHandler() {
-    let handler;
-
-    const router = {
-        post(routePath, routeHandler) {
-            assert.equal(routePath, '/complaints');
-            handler = routeHandler;
-        }
-    };
-
-    const mockExpress = {
-        Router: () => router
-    };
-
-    const mockCrypto = {
-        randomUUID: () => require('node:crypto').randomUUID()
-    };
-
-    const module = { exports: {} };
-
-    runInNewContext(
-        `
-        const express = require('express');
-        const { randomUUID } = require('node:crypto');
-        ${require('node:fs').readFileSync(
-            require('node:path').join(__dirname, 'complaintRoutes.js'),
-            'utf8'
-        )}
-        `,
-        {
-            require: (name) => {
-                if (name === 'express') return mockExpress;
-                if (name === 'node:crypto') return mockCrypto;
-                throw new Error(`Unexpected module: ${name}`);
-            },
-            module,
-            exports: module.exports
-        }
-    );
-
-    return handler;
-}
-
-function invokeHandler(handler, body) {
+function invokeHandler(body) {
     let statusCode;
     let responseBody;
+
+    const handler = router.stack.find(
+        layer => layer.route?.path === '/complaints'
+    ).route.stack[0].handle;
 
     const res = {
         status(code) {
@@ -62,47 +23,41 @@ function invokeHandler(handler, body) {
     };
 
     handler({ body }, res);
-
     return { statusCode, responseBody };
 }
 
 test('SCMS TC03 accepts 100-character titles and rejects 101-character titles', () => {
-    const handler = loadComplaintHandler();
+    assert.equal(invokeHandler({
+        title: 'a'.repeat(100),
+        description: 'Test complaint'
+    }).statusCode, 201);
 
-    assert.equal(
-        invokeHandler(handler, {
-            title: 'a'.repeat(100),
-            description: 'Test complaint'
-        }).statusCode,
-        201
-    );
-
-    assert.equal(
-        invokeHandler(handler, {
-            title: 'a'.repeat(101),
-            description: 'Test complaint'
-        }).statusCode,
-        422
-    );
+    assert.equal(invokeHandler({
+        title: 'a'.repeat(101),
+        description: 'Test complaint'
+    }).statusCode, 422);
 });
 
 test('FR3 generates a unique complaint ID for each successful submission', () => {
-    const handler = loadComplaintHandler();
-
-    const first = invokeHandler(handler, {
+    const first = invokeHandler({
         title: 'Broken light',
         description: 'Light is not working'
     });
 
-    const second = invokeHandler(handler, {
+    const second = invokeHandler({
         title: 'Water leakage',
         description: 'Leak in the kitchen'
     });
 
     assert.equal(first.statusCode, 201);
     assert.equal(second.statusCode, 201);
-    assert.match(first.responseBody.complaintId, /^[0-9a-f-]{36}$/i);
-    assert.match(second.responseBody.complaintId, /^[0-9a-f-]{36}$/i);
+
+    assert.match(first.responseBody.complaintId,
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+
+    assert.match(second.responseBody.complaintId,
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+
     assert.notEqual(
         first.responseBody.complaintId,
         second.responseBody.complaintId
