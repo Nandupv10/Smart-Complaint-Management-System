@@ -1,15 +1,18 @@
 ﻿const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const express = require('express');
 const router = require('./complaintRoutes');
 
 function invokeHandler(body) {
     let statusCode;
     let responseBody;
 
-    const handler = router.stack.find(
+    const route = router.stack.find(
         layer => layer.route?.path === '/complaints'
-    ).route.stack[0].handle;
+    );
+
+    assert.ok(route, 'POST /complaints route must exist');
+
+    const handler = route.route.stack[0].handle;
 
     const res = {
         status(code) {
