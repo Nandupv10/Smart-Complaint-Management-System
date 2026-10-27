@@ -13,7 +13,6 @@ router.post('/complaints', (req, res) => {
         });
     }
 
-    // SCMS TC03: titles up to 100 characters are valid.
     if (title.length > 100) {
         return res.status(422).json({
             error: 'Title must not exceed 100 characters.'
@@ -22,7 +21,7 @@ router.post('/complaints', (req, res) => {
 
     const complaintId = randomUUID();
 
-    res.status(201).json({
+    return res.status(201).json({
         message: 'Complaint submitted successfully.',
         complaintId
     });
