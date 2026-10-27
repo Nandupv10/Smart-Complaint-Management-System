@@ -19,7 +19,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Check repository
-        run: |
-          echo "SCMS repository checked out successfully"
-          find . -maxdepth 2 -type f | head -100
+      - name: Run complaint route tests
+        working-directory: backend
+        run: node --test complaintRoutes.test.js
