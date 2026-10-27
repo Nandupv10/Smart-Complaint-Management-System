@@ -27,7 +27,6 @@ function invokeHandler(body) {
     };
 
     handler({ body }, res);
-
     return { statusCode, responseBody };
 }
 
