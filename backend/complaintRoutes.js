@@ -1,4 +1,7 @@
+
 const express = require('express');
+const { randomUUID } = require('node:crypto');
+
 const router = express.Router();
 
 router.post('/complaints', (req, res) => {
@@ -17,8 +20,11 @@ router.post('/complaints', (req, res) => {
         });
     }
 
+    const complaintId = randomUUID();
+
     res.status(201).json({
-        message: 'Complaint submitted successfully.'
+        message: 'Complaint submitted successfully.',
+        complaintId
     });
 });
 
