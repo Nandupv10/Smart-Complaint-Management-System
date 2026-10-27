@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { runInNewContext } = require('node:vm');
 const { test } = require('node:test');
 
+
 function loadComplaintHandler() {
     let handler;
 
@@ -22,6 +23,26 @@ function loadComplaintHandler() {
     };
 
     const module = { exports: {} };
+
+    runInNewContext(
+        require('node:fs').readFileSync(
+            require('node:path').join(__dirname, 'complaintRoutes.js'),
+            'utf8'
+        ),
+        {
+            require: (name) => {
+                if (name === 'express') return mockExpress;
+                if (name === 'node:crypto') return mockCrypto;
+                throw new Error(`Unexpected module: ${name}`);
+            },
+            module,
+            exports: module.exports
+        }
+    );
+
+    return handler;
+}
+
 
     runInNewContext(
         `
