@@ -1,12 +1,18 @@
 const express = require('express');
 const { randomUUID } = require('node:crypto');
+const { requireAuth } = require('./auth');
 
 const router = express.Router();
 
-router.post('/complaints', (req, res) => {
-    const { title, description } = req.body;
+router.post('/complaints', requireAuth, (req, res) => {
+    const { title, description } = req.body || {};
 
-    if (!title || !description) {
+    if (
+        typeof title !== 'string' ||
+        typeof description !== 'string' ||
+        !title.trim() ||
+        !description.trim()
+    ) {
         return res.status(400).json({
             error: 'Title and description are required.'
         });
@@ -22,7 +28,8 @@ router.post('/complaints', (req, res) => {
 
     return res.status(201).json({
         message: 'Complaint submitted successfully.',
-        complaintId
+        complaintId,
+        submittedBy: req.user.id
     });
 });
 
