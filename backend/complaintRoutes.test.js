@@ -1,17 +1,20 @@
+
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const express = require('express');
 const { createToken } = require('./auth');
-const router = require('./complaintRoutes');
+const { createComplaintRouter } = require('./complaintRoutes');
 
 process.env.JWT_SECRET =
     'test-secret-key-at-least-32-characters-long';
 
-function invokeHandler(body, token) {
+function invokeHandler(body, token, pool = {
+    execute: async () => [{}]
+}) {
     return new Promise(resolve => {
         const app = express();
         app.use(express.json());
-        app.use(router);
+        app.use(createComplaintRouter(pool));
 
         const server = app.listen(0, () => {
             const address = server.address();
@@ -55,7 +58,10 @@ function invokeHandler(body, token) {
     });
 }
 
-const token = () => createToken({ id: 'test-user-1', role: 'user' });
+const token = () => createToken({
+    id: 'test-user-1',
+    role: 'user'
+});
 
 test('SCMS TC03 accepts 100-character titles and rejects 101-character titles', async () => {
     const valid = await invokeHandler({
@@ -102,6 +108,29 @@ test('FR3 generates a unique complaint ID for each successful submission', async
     );
 });
 
+test('FR2 saves the complaint using the authenticated user ID', async () => {
+    let savedValues;
+
+    const pool = {
+        execute: async (sql, values) => {
+            savedValues = values;
+            assert.match(sql, /INSERT INTO complaints/i);
+            return [{ affectedRows: 1 }];
+        }
+    };
+
+    const result = await invokeHandler({
+        title: 'Broken light',
+        description: 'Light is not working'
+    }, token(), pool);
+
+    assert.equal(result.statusCode, 201);
+    assert.equal(savedValues[1], 'test-user-1');
+    assert.equal(savedValues[2], 'Broken light');
+    assert.equal(savedValues[3], 'Light is not working');
+    assert.equal(savedValues[0], result.responseBody.complaintId);
+});
+
 test('complaint submission without a token returns 401', async () => {
     const result = await invokeHandler({
         title: 'Broken light',
@@ -109,4 +138,23 @@ test('complaint submission without a token returns 401', async () => {
     });
 
     assert.equal(result.statusCode, 401);
+});
+
+test('complaint submission returns 500 when database insertion fails', async () => {
+    const pool = {
+        execute: async () => {
+            throw new Error('Simulated database failure');
+        }
+    };
+
+    const result = await invokeHandler({
+        title: 'Broken light',
+        description: 'Light is not working'
+    }, token(), pool);
+
+    assert.equal(result.statusCode, 500);
+    assert.equal(
+        result.responseBody.error,
+        'Unable to submit complaint. Please try again.'
+    );
 });
