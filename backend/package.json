@@ -5,15 +5,19 @@
   "description": "Backend for the Smart Complaint Management System",
   "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "test": "node --test"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-  "bcrypt": "^5.1.1",
-  "express": "^4.21.2",
-  "jsonwebtoken": "^9.0.2",
-  "mysql2": "^3.14.0"
-}
+    "bcrypt": "^5.1.1",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.14.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.3.1"
+  }
 }

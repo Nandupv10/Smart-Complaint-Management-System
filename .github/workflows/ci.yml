@@ -1,3 +1,4 @@
+
 name: SCMS CI
 
 on:
@@ -18,6 +19,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
 
       - name: Run complaint route tests
         working-directory: backend
