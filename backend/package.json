@@ -1,0 +1,17 @@
+{
+  "name": "smart-complaint-management-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend for the Smart Complaint Management System",
+  "main": "server.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "express": "^4.21.2"
+  }
+}
