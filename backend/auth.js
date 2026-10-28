@@ -1,100 +1,50 @@
-const crypto = require('node:crypto');
+const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 
-const JWT_SECRET = process.env.JWT_SECRET;
-const TOKEN_LIFETIME_SECONDS = 60 * 60;
+const TOKEN_LIFETIME = '1h';
 
-function createToken(user) {
-    if (!JWT_SECRET || JWT_SECRET.length < 32) {
-        throw new Error('JWT_SECRET must be configured with at least 32 characters.');
+function getJwtSecret() {
+    const secret = process.env.JWT_SECRET;
+
+    if (!secret || Buffer.byteLength(secret, 'utf8') < 32) {
+        throw new Error(
+            'JWT_SECRET must be configured with at least 32 bytes.'
+        );
     }
 
-    const now = Math.floor(Date.now() / 1000);
+    return secret;
+}
 
-    const header = {
-        alg: 'HS256',
-        typ: 'JWT'
-    };
+function createToken(user) {
+    if (
+        !user ||
+        user.id === undefined ||
+        user.id === null ||
+        !['user', 'admin'].includes(user.role)
+    ) {
+        throw new Error('A valid user ID and role are required.');
+    }
 
-    const payload = {
-        sub: String(user.id),
-        role: user.role,
-        iat: now,
-        exp: now + TOKEN_LIFETIME_SECONDS
-    };
-
-    const encode = value =>
-        Buffer.from(JSON.stringify(value)).toString('base64url');
-
-    const unsignedToken = `${encode(header)}.${encode(payload)}`;
-
-    const signature = crypto
-        .createHmac('sha256', JWT_SECRET)
-        .update(unsignedToken)
-        .digest('base64url');
-
-    return `${unsignedToken}.${signature}`;
+    return jwt.sign(
+        { role: user.role },
+        getJwtSecret(),
+        {
+            algorithm: 'HS256',
+            subject: String(user.id),
+            expiresIn: TOKEN_LIFETIME
+        }
+    );
 }
 
 function verifyToken(token) {
-    if (!JWT_SECRET || JWT_SECRET.length < 32) {
-        throw new Error('JWT_SECRET must be configured with at least 32 characters.');
-    }
-
-    if (typeof token !== 'string') {
-        return null;
-    }
-
-    const parts = token.split('.');
-
-    if (parts.length !== 3) {
-        return null;
-    }
-
-    const [encodedHeader, encodedPayload, signature] = parts;
-    const unsignedToken = `${encodedHeader}.${encodedPayload}`;
-
-    const expectedSignature = crypto
-        .createHmac('sha256', JWT_SECRET)
-        .update(unsignedToken)
-        .digest();
-
-    let providedSignature;
-
-    try {
-        providedSignature = Buffer.from(signature, 'base64url');
-    } catch {
-        return null;
-    }
-
-    if (
-        providedSignature.length !== expectedSignature.length ||
-        !crypto.timingSafeEqual(providedSignature, expectedSignature)
-    ) {
+    if (typeof token !== 'string' || !token.trim()) {
         return null;
     }
 
     try {
-        const header = JSON.parse(
-            Buffer.from(encodedHeader, 'base64url').toString('utf8')
-        );
-
-        const payload = JSON.parse(
-            Buffer.from(encodedPayload, 'base64url').toString('utf8')
-        );
-
-        if (
-            header.alg !== 'HS256' ||
-            header.typ !== 'JWT' ||
-            !payload.sub ||
-            !['user', 'admin'].includes(payload.role) ||
-            !Number.isInteger(payload.exp) ||
-            payload.exp <= Math.floor(Date.now() / 1000)
-        ) {
-            return null;
-        }
-
-        return payload;
+        return jwt.verify(token, getJwtSecret(), {
+            algorithms: ['HS256']
+        });
     } catch {
         return null;
     }
@@ -116,12 +66,16 @@ async function verifyPassword(password, passwordHash) {
         return false;
     }
 
-    return bcrypt.compare(password, passwordHash);
+    try {
+        return await bcrypt.compare(password, passwordHash);
+    } catch {
+        return false;
+    }
 }
 
 function requireAuth(req, res, next) {
     const authorization = req.headers.authorization || '';
-    const match = authorization.match(/^Bearer\s+(.+)$/i);
+    const match = authorization.match(/^Bearer\s+(\S+)$/i);
 
     if (!match) {
         return res.status(401).json({
@@ -131,7 +85,11 @@ function requireAuth(req, res, next) {
 
     const payload = verifyToken(match[1]);
 
-    if (!payload) {
+    if (
+        !payload ||
+        typeof payload.sub !== 'string' ||
+        !['user', 'admin'].includes(payload.role)
+    ) {
         return res.status(401).json({
             error: 'Invalid or expired token.'
         });
