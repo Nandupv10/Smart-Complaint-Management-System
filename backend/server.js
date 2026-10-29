@@ -1,7 +1,8 @@
 
 const express = require('express');
 const authRoutes = require('./authRoutes');
-const complaintRoutes = require('./complaintRoutes');
+const { createPool } = require('./db');
+const { createComplaintRouter } = require('./complaintRoutes');
 
 const app = express();
 
@@ -9,7 +10,7 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '10kb' }));
 
 app.use('/auth', authRoutes);
-app.use('/', complaintRoutes);
+app.use('/', createComplaintRouter(createPool()));
 
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' });
