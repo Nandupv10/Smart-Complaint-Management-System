@@ -285,3 +285,20 @@ Smart-Complaint-Management-System/
 └── 09_Demo/
     ├── Demo Video
     └── Output Screenshots
+```
+
+## 15. Team Members
+
+Name: Narina Jeevan Naga Deep
+SRN: PES1UG24CS295
+
+Name: Nallamalli Kanaka Mani Sai Akhil
+SRN: PES1UG24CS290
+
+Name: Nandakishore PV
+SRN: PES1UG24CS295
+
+Name: M Nikhil Sai
+SRN: PES1UG24CS290
+
+
