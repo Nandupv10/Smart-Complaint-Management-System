@@ -1,17 +1,21 @@
 {
-  "name": "backend",
+  "name": "smart-complaint-management-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "complaintRoutes.js",
+  "private": true,
+  "description": "Backend for the Smart Complaint Management System",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "test": "node --test"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "express": "^5.3.0"
+    "bcrypt": "^5.1.1",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.14.0"
   },
   "devDependencies": {
     "supertest": "^7.3.1"
