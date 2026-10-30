@@ -1,7 +1,7 @@
-
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const express = require('express');
+const http = require('node:http');
 const { createToken } = require('./auth');
 const { createComplaintRouter } = require('./complaintRoutes');
 
@@ -10,7 +10,7 @@ process.env.JWT_SECRET =
 
 function invokeHandler(body, token, pool = {
     execute: async () => [{}]
-}) {
+}, method = 'POST') {
     return new Promise(resolve => {
         const app = express();
         app.use(express.json());
@@ -18,21 +18,24 @@ function invokeHandler(body, token, pool = {
 
         const server = app.listen(0, () => {
             const address = server.address();
+
             const options = {
                 hostname: '127.0.0.1',
                 port: address.port,
                 path: '/complaints',
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                method,
+                headers: {}
             };
+
+            if (method === 'POST') {
+                options.headers['Content-Type'] = 'application/json';
+            }
 
             if (token) {
                 options.headers.Authorization = `Bearer ${token}`;
             }
 
-            const req = require('node:http').request(options, res => {
+            const req = http.request(options, res => {
                 let data = '';
 
                 res.on('data', chunk => {
@@ -53,7 +56,11 @@ function invokeHandler(body, token, pool = {
                 server.close(() => resolve({ error }));
             });
 
-            req.end(JSON.stringify(body));
+            if (method === 'POST' && body) {
+                req.write(JSON.stringify(body));
+            }
+
+            req.end();
         });
     });
 }
@@ -62,6 +69,8 @@ const token = () => createToken({
     id: 'test-user-1',
     role: 'user'
 });
+
+// Existing FR2 and FR3 tests
 
 test('SCMS TC03 accepts 100-character titles and rejects 101-character titles', async () => {
     const valid = await invokeHandler({
@@ -156,5 +165,94 @@ test('complaint submission returns 500 when database insertion fails', async () 
     assert.equal(
         result.responseBody.error,
         'Unable to submit complaint. Please try again.'
+    );
+});
+
+// New FR4 tests
+
+test('FR4 retrieves complaints belonging to the authenticated user', async () => {
+    let executedSql;
+    let executedValues;
+
+    const mockComplaints = [
+        {
+            complaint_id: 'complaint-123',
+            title: 'Broken light',
+            description: 'The light is not working',
+            status: 'submitted',
+            created_at: '2026-10-30 10:00:00',
+            updated_at: '2026-10-30 10:00:00'
+        }
+    ];
+
+    const pool = {
+        execute: async (sql, values) => {
+            executedSql = sql;
+            executedValues = values;
+            return [mockComplaints];
+        }
+    };
+
+    const result = await invokeHandler(
+        null,
+        token(),
+        pool,
+        'GET'
+    );
+
+    assert.equal(result.statusCode, 200);
+    assert.deepEqual(result.responseBody.complaints, mockComplaints);
+    assert.deepEqual(executedValues, ['test-user-1']);
+    assert.match(executedSql, /WHERE user_id\s*=\s*\?/i);
+    assert.match(executedSql, /ORDER BY created_at DESC/i);
+});
+
+test('FR4 returns an empty array when the user has no complaints', async () => {
+    const pool = {
+        execute: async () => [[]]
+    };
+
+    const result = await invokeHandler(
+        null,
+        token(),
+        pool,
+        'GET'
+    );
+
+    assert.equal(result.statusCode, 200);
+    assert.deepEqual(result.responseBody, {
+        complaints: []
+    });
+});
+
+test('FR4 rejects requests without an authentication token', async () => {
+    const result = await invokeHandler(
+        null,
+        null,
+        undefined,
+        'GET'
+    );
+
+    assert.equal(result.statusCode, 401);
+});
+
+test('FR4 returns 500 when retrieving complaints fails', async () => {
+    const pool = {
+        execute: async () => {
+            throw new Error('Simulated database failure');
+        }
+    };
+
+    const result = await invokeHandler(
+        null,
+        token(),
+        pool,
+        'GET'
+    );
+
+    assert.equal(result.statusCode, 500);
+    assert.equal(
+        result.responseBody.error,
+        'Unable to retrieve complaints. Please try again.'
     );
 });

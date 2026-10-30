@@ -1,4 +1,3 @@
-
 const express = require('express');
 const { randomUUID } = require('node:crypto');
 const { requireAuth } = require('./auth');
@@ -6,6 +5,7 @@ const { requireAuth } = require('./auth');
 function createComplaintRouter(pool) {
     const router = express.Router();
 
+    // FR2: Submit a complaint
     router.post('/complaints', requireAuth, async (req, res) => {
         const { title, description } = req.body || {};
 
@@ -51,6 +51,32 @@ function createComplaintRouter(pool) {
 
             return res.status(500).json({
                 error: 'Unable to submit complaint. Please try again.'
+            });
+        }
+    });
+
+    // FR4: View and track complaints
+    router.get('/complaints', requireAuth, async (req, res) => {
+        try {
+            const userId = req.user.id;
+
+            const [complaints] = await pool.execute(
+                `SELECT complaint_id, title, description, status,
+                        created_at, updated_at
+                 FROM complaints
+                 WHERE user_id = ?
+                 ORDER BY created_at DESC`,
+                [userId]
+            );
+
+            return res.status(200).json({
+                complaints
+            });
+        } catch (error) {
+            console.error('Failed to retrieve complaints:', error.message);
+
+            return res.status(500).json({
+                error: 'Unable to retrieve complaints. Please try again.'
             });
         }
     });
