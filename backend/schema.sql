@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS complaints (
     user_id BIGINT UNSIGNED NOT NULL,
     title VARCHAR(100) NOT NULL,
     description TEXT NOT NULL,
+    category VARCHAR(100) NOT NULL DEFAULT 'Uncategorized',
     status ENUM('submitted', 'in_progress', 'resolved', 'rejected')
         NOT NULL DEFAULT 'submitted',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
