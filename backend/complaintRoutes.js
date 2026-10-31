@@ -1,4 +1,3 @@
-
 const express = require('express');
 const { randomUUID } = require('node:crypto');
 const { requireAuth, requireRole } = require('./auth');
@@ -6,31 +5,9 @@ const { requireAuth, requireRole } = require('./auth');
 function createComplaintRouter(pool) {
     const router = express.Router();
 
-    const allowedCategories = [
-        'Infrastructure',
-        'Hostel',
-        'Maintenance',
-        'Cleanliness',
-        'IT Support',
-        'Academics',
-        'Other'
-    ];
-
-    const validStatuses = [
-        'submitted',
-        'in_progress',
-        'resolved',
-        'rejected'
-    ];
-
-    // FR2 / FR3: Submit a complaint.
+    // FR2 / FR3: Submit a complaint and generate a unique ID.
     router.post('/complaints', requireAuth, async (req, res) => {
         const { title, description } = req.body || {};
-
-        // Keep backward compatibility with existing clients.
-        const category = req.body?.category === undefined
-            ? 'Uncategorized'
-            : req.body.category;
 
         if (
             typeof title !== 'string' ||
@@ -43,21 +20,9 @@ function createComplaintRouter(pool) {
             });
         }
 
-        if (title.trim().length > 100) {
+        if (title.length > 100) {
             return res.status(422).json({
                 error: 'Title must not exceed 100 characters.'
-            });
-        }
-
-        if (
-            typeof category !== 'string' ||
-            (
-                category !== 'Uncategorized' &&
-                !allowedCategories.includes(category)
-            )
-        ) {
-            return res.status(400).json({
-                error: 'Please select a valid complaint category.'
             });
         }
 
@@ -66,14 +31,13 @@ function createComplaintRouter(pool) {
         try {
             await pool.execute(
                 `INSERT INTO complaints
-                    (complaint_id, user_id, title, description, category)
-                 VALUES (?, ?, ?, ?, ?)`,
+                    (complaint_id, user_id, title, description)
+                 VALUES (?, ?, ?, ?)`,
                 [
                     complaintId,
                     req.user.id,
                     title.trim(),
-                    description.trim(),
-                    category
+                    description.trim()
                 ]
             );
 
@@ -83,10 +47,7 @@ function createComplaintRouter(pool) {
                 submittedBy: req.user.id
             });
         } catch (error) {
-            console.error(
-                'Failed to save complaint:',
-                error.message
-            );
+            console.error('Failed to save complaint:', error.message);
 
             return res.status(500).json({
                 error: 'Unable to submit complaint. Please try again.'
@@ -94,73 +55,27 @@ function createComplaintRouter(pool) {
         }
     });
 
-    // Securely delete a complaint.
-    // Users can delete only their own complaints.
-    // Administrators can delete any complaint.
-    router.delete('/complaints/:id', requireAuth, async (req, res) => {
-        const complaintId = req.params.id;
-
-        if (
-            typeof complaintId !== 'string' ||
-            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(complaintId)
-        ) {
-            return res.status(400).json({
-                error: 'Invalid complaint ID.'
-            });
-        }
-
-        try {
-            let result;
-
-            if (req.user.role === 'admin') {
-                [result] = await pool.execute(
-                    `DELETE FROM complaints
-                     WHERE complaint_id = ?`,
-                    [complaintId]
-                );
-            } else {
-                [result] = await pool.execute(
-                    `DELETE FROM complaints
-                     WHERE complaint_id = ?
-                     AND user_id = ?`,
-                    [complaintId, req.user.id]
-                );
-            }
-
-            if (result.affectedRows === 0) {
-                return res.status(404).json({
-                    error: 'Complaint not found.'
-                });
-            }
-
-            return res.status(200).json({
-                message: 'Complaint deleted successfully.',
-                complaintId
-            });
-        } catch (error) {
-            console.error(
-                'Failed to delete complaint:',
-                error.message
-            );
-
-            return res.status(500).json({
-                error: 'Unable to delete complaint. Please try again.'
-            });
-        }
-    });
-
     // FR4 / FR5: Retrieve complaints with optional filters.
-    // Regular users see only their own complaints.
-    // Administrators see all complaints.
+    // Regular users can see only their own complaints.
+    // Administrators can see all complaints.
     router.get('/complaints', requireAuth, async (req, res) => {
         const { status, category, startDate, endDate } = req.query;
 
+        const validStatuses = [
+            'submitted',
+            'in_progress',
+            'resolved',
+            'rejected'
+        ];
+
+        // Validate status.
         if (status && !validStatuses.includes(status)) {
             return res.status(400).json({
                 error: 'Invalid status filter.'
             });
         }
 
+        // Validate date formats.
         if (
             startDate &&
             !/^\d{4}-\d{2}-\d{2}$/.test(startDate)
@@ -179,6 +94,7 @@ function createComplaintRouter(pool) {
             });
         }
 
+        // Validate the date range.
         if (startDate && endDate && startDate > endDate) {
             return res.status(400).json({
                 error: 'startDate must be on or before endDate.'
@@ -188,26 +104,31 @@ function createComplaintRouter(pool) {
         const conditions = [];
         const params = [];
 
+        // Enforce user-specific access.
         if (req.user.role !== 'admin') {
             conditions.push('user_id = ?');
             params.push(req.user.id);
         }
 
+        // FR5: Filter by status.
         if (status) {
             conditions.push('status = ?');
             params.push(status);
         }
 
+        // FR5: Filter by category.
         if (category) {
             conditions.push('category = ?');
             params.push(category);
         }
 
+        // FR5: Filter from the start date.
         if (startDate) {
             conditions.push('created_at >= ?');
             params.push(`${startDate} 00:00:00`);
         }
 
+        // FR5: Include the entire end date.
         if (endDate) {
             conditions.push(
                 'created_at < DATE_ADD(?, INTERVAL 1 DAY)'
@@ -244,7 +165,7 @@ function createComplaintRouter(pool) {
         }
     });
 
-    // FR5: Only administrators can change complaint categories.
+    // FR5: Only administrators can assign or change categories.
     router.patch(
         '/complaints/:id/category',
         requireAuth,
@@ -252,20 +173,15 @@ function createComplaintRouter(pool) {
         async (req, res) => {
             const { category } = req.body || {};
 
-            // Accept a non-empty category up to the database limit.
-            // This also allows the existing FR5 tests to use
-            // category names beyond the complaint form's options.
             if (
                 typeof category !== 'string' ||
                 !category.trim() ||
                 category.trim().length > 100
             ) {
                 return res.status(400).json({
-                    error: 'A category of 1-100 characters is required.'
+                    error: 'A category of 1–100 characters is required.'
                 });
             }
-
-            const normalizedCategory = category.trim();
 
             try {
                 const [result] = await pool.execute(
@@ -273,7 +189,7 @@ function createComplaintRouter(pool) {
                      SET category = ?
                      WHERE complaint_id = ?`,
                     [
-                        normalizedCategory,
+                        category.trim(),
                         req.params.id
                     ]
                 );
@@ -287,7 +203,7 @@ function createComplaintRouter(pool) {
                 return res.status(200).json({
                     message: 'Complaint category updated successfully.',
                     complaintId: req.params.id,
-                    category: normalizedCategory
+                    category: category.trim()
                 });
             } catch (error) {
                 console.error(
