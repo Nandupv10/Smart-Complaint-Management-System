@@ -1,11 +1,14 @@
-
 const express = require('express');
 const authRoutes = require('./authRoutes');
 const { createPool } = require('./db');
 const { createComplaintRouter } = require('./complaintRoutes');
-const cors = require("cors");
+const cors = require('cors');
+const responseTime = require('./responseTime');
+
 const app = express();
-app.use(cors({ origin: "http://localhost:5173" }));
+
+app.use(responseTime);
+app.use(cors({ origin: 'http://localhost:5173' }));
 app.disable('x-powered-by');
 app.use(express.json({ limit: '10kb' }));
 
