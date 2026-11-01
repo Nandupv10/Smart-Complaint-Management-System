@@ -187,8 +187,23 @@ export default function App() {
     event.preventDefault();
     setNotice(null);
 
-    if (!authForm.email.trim() || !authForm.password) {
+    const email = authForm.email.trim().toLowerCase();
+
+    if (!email || !authForm.password) {
       setNotice({ type: "error", text: "Enter your email and password." });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setNotice({ type: "error", text: "Enter a valid email address." });
+      return;
+    }
+
+    if (authMode === "register" && authForm.password.length < 12) {
+      setNotice({
+        type: "error",
+        text: "Your password must contain at least 12 characters.",
+      });
       return;
     }
 
@@ -199,7 +214,7 @@ export default function App() {
       const data = await apiRequest(path, {
         method: "POST",
         body: JSON.stringify({
-          email: authForm.email.trim(),
+          email,
           password: authForm.password,
         }),
       });

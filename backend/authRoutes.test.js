@@ -45,6 +45,24 @@ test('login rejects missing credentials', async () => {
     assert.equal(response.status, 400);
 });
 
+test('login rejects an invalid email format before querying the database', async () => {
+    let databaseCalled = false;
+    mockPool.execute = async () => {
+        databaseCalled = true;
+        return [[], []];
+    };
+
+    const response = await request(app)
+        .post('/auth/login')
+        .send({
+            email: 'not-an-email',
+            password: 'SecurePassword123!'
+        });
+
+    assert.equal(response.status, 400);
+    assert.equal(databaseCalled, false);
+});
+
 test('login rejects an unknown email', async () => {
     mockPool.execute = async () => [[], []];
 
@@ -78,6 +96,7 @@ test('registration creates an account successfully', async () => {
 
     assert.equal(response.status, 201);
     assert.equal(response.body.userId, '42');
+    assert.equal(Object.hasOwn(response.body, 'passwordHash'), false);
 });
 
 test('registration rejects duplicate email addresses', async () => {
