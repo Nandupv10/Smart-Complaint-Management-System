@@ -11,6 +11,20 @@ const router = express.Router();
 
 let pool;
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizeEmail(email) {
+    if (typeof email !== 'string') {
+        return null;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    return EMAIL_PATTERN.test(normalizedEmail) && normalizedEmail.length <= 254
+        ? normalizedEmail
+        : null;
+}
+
 function getPool() {
     if (!pool) {
         pool = createPool();
@@ -21,20 +35,19 @@ function getPool() {
 // Register a new user
 router.post('/register', async (req, res) => {
     const { email, password } = req.body || {};
+    const normalizedEmail = normalizeEmail(email);
 
     if (
-    typeof email !== 'string' ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
-    typeof password !== 'string' ||
-    password.length < 12
-) {
+        !normalizedEmail ||
+        typeof password !== 'string' ||
+        password.length < 12
+    ) {
         return res.status(400).json({
             error: 'A valid email and password of at least 12 characters are required.'
         });
     }
 
     try {
-        const normalizedEmail = email.trim().toLowerCase();
         const passwordHash = await hashPassword(password);
 
         const [result] = await getPool().execute(
@@ -53,7 +66,7 @@ router.post('/register', async (req, res) => {
             });
         }
 
-        console.error('Registration failed:', error.message);
+        console.error('Registration failed.');
 
         return res.status(500).json({
             error: 'Registration could not be completed.'
@@ -64,15 +77,15 @@ router.post('/register', async (req, res) => {
 // Log in an existing user
 router.post('/login', async (req, res) => {
     const { email, password } = req.body || {};
+    const normalizedEmail = normalizeEmail(email);
 
     if (
-        typeof email !== 'string' ||
+        !normalizedEmail ||
         typeof password !== 'string' ||
-        !email.trim() ||
         !password
     ) {
         return res.status(400).json({
-            error: 'Email and password are required.'
+            error: 'A valid email and password are required.'
         });
     }
 
@@ -82,7 +95,7 @@ router.post('/login', async (req, res) => {
                     failed_login_attempts, locked_until
              FROM users
              WHERE email = ?`,
-            [email.trim().toLowerCase()]
+            [normalizedEmail]
         );
 
         const user = rows[0];
@@ -151,7 +164,7 @@ router.post('/login', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Login failed:', error.message);
+        console.error('Login failed.');
 
         return res.status(500).json({
             error: 'Login could not be completed.'

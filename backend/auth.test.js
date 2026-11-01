@@ -74,6 +74,23 @@ test('returns 401 when the authorization token is missing', () => {
     assert.equal(nextCalled, false);
 });
 
+test('accepts a valid bearer token and attaches only its ID and role', () => {
+    const req = {
+        headers: {
+            authorization: `Bearer ${createToken({ id: '123', role: 'user' })}`
+        }
+    };
+    const res = {};
+    let nextCalled = false;
+
+    requireAuth(req, res, () => {
+        nextCalled = true;
+    });
+
+    assert.equal(nextCalled, true);
+    assert.deepEqual(req.user, { id: '123', role: 'user' });
+});
+
 test('denies access when the user role is not permitted', () => {
     const req = { user: { id: '123', role: 'user' } };
     const res = {
