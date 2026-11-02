@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
         ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uq_users_email (email)
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS complaints (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -30,4 +30,4 @@ CREATE TABLE IF NOT EXISTS complaints (
     KEY idx_complaints_user_id (user_id),
     CONSTRAINT fk_complaints_user
         FOREIGN KEY (user_id) REFERENCES users(id)
-);
+) ENGINE=InnoDB;
