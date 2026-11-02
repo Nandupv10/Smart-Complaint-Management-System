@@ -166,6 +166,8 @@ The testing documentation includes:
 
 The relevant documents and screenshots are maintained in the `Test_Planning` and `Testing` folders.
 
+For NFR04 reliable storage, transactional-storage design, secure daily MySQL backups, seven-day retention, restoration guidance, and TC14 verification steps, see [NFR04 data durability documentation](docs/nfr4-data-durability.md).
+
 ---
 
 ## 10. Project Management
