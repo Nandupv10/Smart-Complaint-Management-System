@@ -1,6 +1,6 @@
 # Smart Complaint Management System
 
-## 1. Project Overview
+## 1. Project Overviews
 
 The Smart Complaint Management System (SCMS) is a centralized web-based system for submitting, managing, tracking, and resolving complaints.
 
