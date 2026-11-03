@@ -1,4 +1,3 @@
-
 const express = require('express');
 const { randomUUID } = require('node:crypto');
 const { requireAuth, requireRole } = require('./auth');
@@ -18,9 +17,10 @@ function createComplaintRouter(pool) {
 
     const validStatuses = [
         'submitted',
+        'assigned',
         'in_progress',
         'resolved',
-        'rejected'
+        'closed'
     ];
 
     // FR2 / FR3: Submit a complaint.
@@ -298,6 +298,170 @@ function createComplaintRouter(pool) {
                 return res.status(500).json({
                     error: 'Unable to update complaint category.'
                 });
+            }
+        }
+    );
+
+    // ==================================================
+    // FR7: Admin updates or resolves a complaint.
+    // ==================================================
+
+    router.patch(
+        '/complaints/:id/status',
+        requireAuth,
+        requireRole('admin'),
+        async (req, res) => {
+            const complaintId = req.params.id;
+            const { status, remark } = req.body || {};
+            const adminId = req.user.id;
+
+            // Allowed transitions along documented lifecycle:
+            // Submitted -> Assigned -> In Progress -> Resolved -> Closed
+            const allowedTransitions = {
+                submitted: ['assigned'],
+                assigned: ['in_progress'],
+                in_progress: ['resolved'],
+                resolved: ['closed'],
+                closed: []
+            };
+
+            // Validate status.
+            if (
+                typeof status !== 'string' ||
+                !validStatuses.includes(status)
+            ) {
+                return res.status(400).json({
+                    error: 'Invalid complaint status.'
+                });
+            }
+
+            // Validate remark.
+            // A remark is required for every status change (must be fewer than 500 characters).
+            if (
+                typeof remark !== 'string' ||
+                !remark.trim() ||
+                remark.trim().length >= 500
+            ) {
+                return res.status(400).json({
+                    error: 'Remark is required and must be less than 500 characters.'
+                });
+            }
+
+            let connection;
+            let transactionStarted = false;
+
+            try {
+                // Get a dedicated connection for the transaction.
+                connection = await pool.getConnection();
+
+                await connection.beginTransaction();
+                transactionStarted = true;
+
+                // Lock the complaint row to prevent simultaneous updates.
+                const [complaints] = await connection.execute(
+                    `SELECT complaint_id, status
+                     FROM complaints
+                     WHERE complaint_id = ?
+                     FOR UPDATE`,
+                    [complaintId]
+                );
+
+                if (complaints.length === 0) {
+                    await connection.rollback();
+                    transactionStarted = false;
+
+                    return res.status(404).json({
+                        error: 'Complaint not found.'
+                    });
+                }
+
+                const oldStatus = complaints[0].status;
+
+                // Check whether the requested transition is allowed.
+                if (!allowedTransitions[oldStatus]?.includes(status)) {
+                    await connection.rollback();
+                    transactionStarted = false;
+
+                    return res.status(409).json({
+                        error: `Invalid status transition from ${oldStatus} to ${status}.`
+                    });
+                }
+
+                // Update the complaint status.
+                const [updateResult] = await connection.execute(
+                    `UPDATE complaints
+                     SET status = ?
+                     WHERE complaint_id = ?`,
+                    [status, complaintId]
+                );
+
+                if (updateResult.affectedRows === 0) {
+                    await connection.rollback();
+                    transactionStarted = false;
+
+                    return res.status(404).json({
+                        error: 'Complaint not found.'
+                    });
+                }
+
+                // Store the status change in the audit history.
+                await connection.execute(
+                    `INSERT INTO complaint_status_history
+                        (
+                            complaint_id,
+                            old_status,
+                            new_status,
+                            admin_id,
+                            remark
+                        )
+                     VALUES (?, ?, ?, ?, ?)`,
+                    [
+                        complaintId,
+                        oldStatus,
+                        status,
+                        adminId,
+                        remark.trim()
+                    ]
+                );
+
+                // Commit both operations together.
+                await connection.commit();
+                transactionStarted = false;
+
+                return res.status(200).json({
+                    message: 'Complaint status updated successfully.',
+                    complaint: {
+                        complaintId,
+                        oldStatus,
+                        newStatus: status,
+                        remark: remark.trim(),
+                        updatedBy: adminId
+                    }
+                });
+            } catch (error) {
+                if (connection && transactionStarted) {
+                    try {
+                        await connection.rollback();
+                    } catch (rollbackError) {
+                        console.error(
+                            'FR7 transaction rollback failed:',
+                            rollbackError.message
+                        );
+                    }
+                }
+
+                console.error(
+                    'Failed to update complaint status:',
+                    error.message
+                );
+
+                return res.status(500).json({
+                    error: 'Unable to update complaint status.'
+                });
+            } finally {
+                if (connection) {
+                    connection.release();
+                }
             }
         }
     );
