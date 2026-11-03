@@ -420,3 +420,229 @@ test('FR5 returns 404 when the complaint does not exist', async () => {
 
     assert.equal(result.statusCode, 404);
 });
+
+
+// FR6 tests
+
+test('FR6 allows administrators to assign a complaint to a department and person', async () => {
+    let executedSql;
+    let executedValues;
+
+    const pool = {
+        execute: async (sql, values) => {
+            executedSql = sql;
+            executedValues = values;
+            return [{ affectedRows: 1 }];
+        }
+    };
+
+    const result = await invokeHandler(
+        { department: 'Maintenance', assignedTo: 'John Doe' },
+        adminToken(),
+        pool,
+        'PATCH',
+        '/complaints/complaint-123/assign'
+    );
+
+    assert.equal(result.statusCode, 200);
+    assert.match(executedSql, /UPDATE complaints/i);
+    assert.match(executedSql, /assigned_department/i);
+    assert.match(executedSql, /assigned_to/i);
+    assert.match(executedSql, /status\s*=\s*'assigned'/i);
+
+    assert.deepEqual(executedValues, [
+        'Maintenance',
+        'John Doe',
+        'complaint-123'
+    ]);
+
+    assert.equal(result.responseBody.assignedDepartment, 'Maintenance');
+    assert.equal(result.responseBody.assignedTo, 'John Doe');
+    assert.equal(result.responseBody.status, 'assigned');
+});
+
+test('FR6 allows assignment with department only or person only', async () => {
+    let deptValues;
+    const poolDept = {
+        execute: async (sql, values) => {
+            deptValues = values;
+            return [{ affectedRows: 1 }];
+        }
+    };
+
+    const resultDept = await invokeHandler(
+        { department: 'Hostel' },
+        adminToken(),
+        poolDept,
+        'PATCH',
+        '/complaints/complaint-123/assign'
+    );
+
+    assert.equal(resultDept.statusCode, 200);
+    assert.equal(deptValues[0], 'Hostel');
+    assert.equal(deptValues[1], null);
+    assert.equal(deptValues[2], 'complaint-123');
+
+    let personValues;
+    const poolPerson = {
+        execute: async (sql, values) => {
+            personValues = values;
+            return [{ affectedRows: 1 }];
+        }
+    };
+
+    const resultPerson = await invokeHandler(
+        { assignedTo: 'Warden Smith' },
+        adminToken(),
+        poolPerson,
+        'PATCH',
+        '/complaints/complaint-456/assign'
+    );
+
+    assert.equal(resultPerson.statusCode, 200);
+    assert.equal(personValues[0], null);
+    assert.equal(personValues[1], 'Warden Smith');
+    assert.equal(personValues[2], 'complaint-456');
+});
+
+test('FR6 prevents regular users from assigning complaints', async () => {
+    let databaseCalled = false;
+
+    const pool = {
+        execute: async () => {
+            databaseCalled = true;
+            return [{ affectedRows: 1 }];
+        }
+    };
+
+    const result = await invokeHandler(
+        { department: 'Maintenance', assignedTo: 'John Doe' },
+        token(),
+        pool,
+        'PATCH',
+        '/complaints/complaint-123/assign'
+    );
+
+    assert.equal(result.statusCode, 403);
+    assert.equal(databaseCalled, false);
+});
+
+test('FR6 rejects unauthenticated assignment requests with 401', async () => {
+    const result = await invokeHandler(
+        { department: 'Maintenance' },
+        null,
+        undefined,
+        'PATCH',
+        '/complaints/complaint-123/assign'
+    );
+
+    assert.equal(result.statusCode, 401);
+});
+
+test('FR6 returns 404 when assigning a non-existent complaint', async () => {
+    const pool = {
+        execute: async () => [{ affectedRows: 0 }]
+    };
+
+    const result = await invokeHandler(
+        { department: 'Maintenance' },
+        adminToken(),
+        pool,
+        'PATCH',
+        '/complaints/missing-complaint/assign'
+    );
+
+    assert.equal(result.statusCode, 404);
+});
+
+test('FR6 rejects invalid or empty assignment payloads', async () => {
+    const resultEmpty = await invokeHandler(
+        {},
+        adminToken(),
+        undefined,
+        'PATCH',
+        '/complaints/complaint-123/assign'
+    );
+
+    assert.equal(resultEmpty.statusCode, 400);
+
+    const resultBlankDept = await invokeHandler(
+        { department: '   ' },
+        adminToken(),
+        undefined,
+        'PATCH',
+        '/complaints/complaint-123/assign'
+    );
+
+    assert.equal(resultBlankDept.statusCode, 400);
+
+    const resultLongDept = await invokeHandler(
+        { department: 'x'.repeat(101) },
+        adminToken(),
+        undefined,
+        'PATCH',
+        '/complaints/complaint-123/assign'
+    );
+
+    assert.equal(resultLongDept.statusCode, 400);
+});
+
+test('FR6 filters complaints by assignment status (assigned vs awaiting)', async () => {
+    let assignedSql;
+    let assignedValues;
+
+    const poolAssigned = {
+        execute: async (sql, values) => {
+            assignedSql = sql;
+            assignedValues = values;
+            return [[]];
+        }
+    };
+
+    const resultAssigned = await invokeHandler(
+        null,
+        adminToken(),
+        poolAssigned,
+        'GET',
+        '/complaints?assignmentStatus=assigned'
+    );
+
+    assert.equal(resultAssigned.statusCode, 200);
+    assert.match(assignedSql, /assigned_department IS NOT NULL/i);
+    assert.match(assignedSql, /assigned_to IS NOT NULL/i);
+    assert.deepEqual(assignedValues, ['assigned']);
+
+    let awaitingSql;
+    let awaitingValues;
+
+    const poolAwaiting = {
+        execute: async (sql, values) => {
+            awaitingSql = sql;
+            awaitingValues = values;
+            return [[]];
+        }
+    };
+
+    const resultAwaiting = await invokeHandler(
+        null,
+        adminToken(),
+        poolAwaiting,
+        'GET',
+        '/complaints?assignmentStatus=awaiting'
+    );
+
+    assert.equal(resultAwaiting.statusCode, 200);
+    assert.match(awaitingSql, /assigned_department IS NULL/i);
+    assert.match(awaitingSql, /assigned_to IS NULL/i);
+    assert.deepEqual(awaitingValues, ['assigned']);
+
+    const resultInvalid = await invokeHandler(
+        null,
+        adminToken(),
+        undefined,
+        'GET',
+        '/complaints?assignmentStatus=invalid-status'
+    );
+
+    assert.equal(resultInvalid.statusCode, 400);
+});

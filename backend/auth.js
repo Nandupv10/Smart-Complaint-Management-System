@@ -1,5 +1,10 @@
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
+let bcrypt;
+try {
+    bcrypt = require('bcrypt');
+} catch {
+    bcrypt = null;
+}
 
 const TOKEN_LIFETIME = '1h';
 

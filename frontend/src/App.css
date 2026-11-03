@@ -1349,3 +1349,115 @@ html[data-theme="light"] .app-shell select option {
     font-size: 12px;
   }
 }
+
+/* FR6 Assignment Badges & Controls */
+.status-assigned {
+  color: #7c3aed;
+  background: #7c3aed18;
+}
+
+.assignment-badge {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.assignment-badge.assigned {
+  color: #1e40af;
+  background: #3b82f615;
+  border: 1px solid #3b82f630;
+}
+
+.assignment-badge.awaiting {
+  color: #b45309;
+  background: #f59e0b15;
+  border: 1px dashed #f59e0b40;
+  font-weight: 600;
+}
+
+.assignment-dept {
+  font-weight: 700;
+}
+
+.assignment-person {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.assign-btn {
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.assign-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.25);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.modal-close-btn:hover {
+  color: var(--text);
+}
+
+.modal-subtitle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}

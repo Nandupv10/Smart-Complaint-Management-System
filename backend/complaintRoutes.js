@@ -16,8 +16,20 @@ function createComplaintRouter(pool) {
         'Other'
     ];
 
+    const allowedDepartments = [
+        'Infrastructure',
+        'Hostel',
+        'Maintenance',
+        'Cleanliness',
+        'IT Support',
+        'Academics',
+        'Administration',
+        'Other'
+    ];
+
     const validStatuses = [
         'submitted',
+        'assigned',
         'in_progress',
         'resolved',
         'rejected'
@@ -149,11 +161,20 @@ function createComplaintRouter(pool) {
         }
     });
 
-    // FR4 / FR5: Retrieve complaints with optional filters.
+    // FR4 / FR5 / FR6: Retrieve complaints with optional filters.
     // Regular users see only their own complaints.
     // Administrators see all complaints.
+    // Supports filtering by status, category, date range, and assignmentStatus.
     router.get('/complaints', requireAuth, async (req, res) => {
-        const { status, category, startDate, endDate } = req.query;
+        const {
+            status,
+            category,
+            startDate,
+            endDate,
+            assignmentStatus,
+            department,
+            assignedTo
+        } = req.query;
 
         if (status && !validStatuses.includes(status)) {
             return res.status(400).json({
@@ -182,6 +203,15 @@ function createComplaintRouter(pool) {
         if (startDate && endDate && startDate > endDate) {
             return res.status(400).json({
                 error: 'startDate must be on or before endDate.'
+            });
+        }
+
+        if (
+            assignmentStatus &&
+            !['assigned', 'awaiting', 'unassigned'].includes(assignmentStatus.toLowerCase())
+        ) {
+            return res.status(400).json({
+                error: 'Invalid assignmentStatus filter. Allowed values: assigned, awaiting, unassigned.'
             });
         }
 
@@ -215,6 +245,30 @@ function createComplaintRouter(pool) {
             params.push(endDate);
         }
 
+        if (assignmentStatus) {
+            if (assignmentStatus.toLowerCase() === 'assigned') {
+                conditions.push(
+                    '(assigned_department IS NOT NULL OR assigned_to IS NOT NULL OR status = ?)'
+                );
+                params.push('assigned');
+            } else {
+                conditions.push(
+                    '(assigned_department IS NULL AND assigned_to IS NULL AND status != ?)'
+                );
+                params.push('assigned');
+            }
+        }
+
+        if (department) {
+            conditions.push('assigned_department = ?');
+            params.push(department);
+        }
+
+        if (assignedTo) {
+            conditions.push('assigned_to = ?');
+            params.push(assignedTo);
+        }
+
         const whereClause = conditions.length
             ? `WHERE ${conditions.join(' AND ')}`
             : '';
@@ -222,7 +276,8 @@ function createComplaintRouter(pool) {
         try {
             const [complaints] = await pool.execute(
                 `SELECT complaint_id, title, description, status,
-                        created_at, updated_at, category
+                        category, assigned_department, assigned_to, assigned_at,
+                        created_at, updated_at
                  FROM complaints
                  ${whereClause}
                  ORDER BY created_at DESC`,
@@ -297,6 +352,104 @@ function createComplaintRouter(pool) {
 
                 return res.status(500).json({
                     error: 'Unable to update complaint category.'
+                });
+            }
+        }
+    );
+
+    // FR6: Only administrators can assign complaints to a department or person.
+    router.patch(
+        '/complaints/:id/assign',
+        requireAuth,
+        requireRole('admin'),
+        async (req, res) => {
+            const complaintId = req.params.id;
+
+            if (
+                typeof complaintId !== 'string' ||
+                !complaintId.trim()
+            ) {
+                return res.status(400).json({
+                    error: 'A valid complaint ID is required.'
+                });
+            }
+
+            const { department, assignedTo, person } = req.body || {};
+            const staff = assignedTo !== undefined ? assignedTo : person;
+
+            const hasDepartment = department !== undefined && department !== null;
+            const hasStaff = staff !== undefined && staff !== null;
+
+            if (!hasDepartment && !hasStaff) {
+                return res.status(400).json({
+                    error: 'A department or person must be provided for assignment.'
+                });
+            }
+
+            let normalizedDept = null;
+            if (hasDepartment) {
+                if (
+                    typeof department !== 'string' ||
+                    !department.trim() ||
+                    department.trim().length > 100
+                ) {
+                    return res.status(400).json({
+                        error: 'Department must be a non-empty string up to 100 characters.'
+                    });
+                }
+                normalizedDept = department.trim();
+            }
+
+            let normalizedStaff = null;
+            if (hasStaff) {
+                if (
+                    typeof staff !== 'string' ||
+                    !staff.trim() ||
+                    staff.trim().length > 100
+                ) {
+                    return res.status(400).json({
+                        error: 'Assigned person must be a non-empty string up to 100 characters.'
+                    });
+                }
+                normalizedStaff = staff.trim();
+            }
+
+            try {
+                const [result] = await pool.execute(
+                    `UPDATE complaints
+                     SET assigned_department = COALESCE(?, assigned_department),
+                         assigned_to = COALESCE(?, assigned_to),
+                         assigned_at = CURRENT_TIMESTAMP,
+                         status = 'assigned'
+                     WHERE complaint_id = ?`,
+                    [
+                        normalizedDept,
+                        normalizedStaff,
+                        complaintId.trim()
+                    ]
+                );
+
+                if (result.affectedRows === 0) {
+                    return res.status(404).json({
+                        error: 'Complaint not found.'
+                    });
+                }
+
+                return res.status(200).json({
+                    message: 'Complaint assigned successfully.',
+                    complaintId: complaintId.trim(),
+                    assignedDepartment: normalizedDept,
+                    assignedTo: normalizedStaff,
+                    status: 'assigned'
+                });
+            } catch (error) {
+                console.error(
+                    'Failed to assign complaint:',
+                    error.message
+                );
+
+                return res.status(500).json({
+                    error: 'Unable to assign complaint. Please try again.'
                 });
             }
         }

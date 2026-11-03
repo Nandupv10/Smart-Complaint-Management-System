@@ -16,6 +16,17 @@ const CATEGORY_OPTIONS = [
   "Other",
 ];
 
+const DEPARTMENT_OPTIONS = [
+  "Infrastructure",
+  "Hostel",
+  "Maintenance",
+  "Cleanliness",
+  "IT Support",
+  "Academics",
+  "Administration",
+  "Other",
+];
+
 async function apiRequest(path, { token, ...options } = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -62,6 +73,22 @@ function complaintStatus(item) {
 
 function complaintCategory(item) {
   return item.category ?? "Uncategorized";
+}
+
+function complaintDepartment(item) {
+  return item.assignedDepartment ?? item.assigned_department ?? "";
+}
+
+function complaintAssignedTo(item) {
+  return item.assignedTo ?? item.assigned_to ?? "";
+}
+
+function isComplaintAssigned(item) {
+  return Boolean(
+    complaintDepartment(item) ||
+    complaintAssignedTo(item) ||
+    String(complaintStatus(item)).toLowerCase() === "assigned"
+  );
 }
 
 function displayDate(value) {
@@ -129,6 +156,12 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [assignmentFilter, setAssignmentFilter] = useState("all");
+  const [assigningItem, setAssigningItem] = useState(null);
+  const [assignmentForm, setAssignmentForm] = useState({
+    department: "Maintenance",
+    assignedTo: "",
+  });
 
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
   const [complaintForm, setComplaintForm] = useState({
@@ -325,6 +358,61 @@ export default function App() {
     }
   }
 
+  async function handleAssignSubmit(event) {
+    event.preventDefault();
+    if (!assigningItem) return;
+
+    const department = assignmentForm.department.trim();
+    const assignedTo = assignmentForm.assignedTo.trim();
+
+    if (!department && !assignedTo) {
+      setNotice({
+        type: "error",
+        text: "Please provide either a department or an assigned person.",
+      });
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setNotice(null);
+      await apiRequest(
+        `/complaints/${encodeURIComponent(complaintId(assigningItem))}/assign`,
+        {
+          method: "PATCH",
+          token,
+          body: JSON.stringify({
+            department: department || undefined,
+            assignedTo: assignedTo || undefined,
+          }),
+        }
+      );
+
+      const targetLabel = [department, assignedTo ? `(${assignedTo})` : ""]
+        .filter(Boolean)
+        .join(" ");
+
+      setNotice({
+        type: "success",
+        text: `Complaint #${complaintId(assigningItem)} assigned to ${targetLabel}.`,
+      });
+      setAssigningItem(null);
+      await loadComplaints();
+    } catch (error) {
+      setNotice({ type: "error", text: error.message });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function openAssignModal(item) {
+    setAssignmentForm({
+      department: complaintDepartment(item) || "Maintenance",
+      assignedTo: complaintAssignedTo(item) || "",
+    });
+    setAssigningItem(item);
+  }
+
   async function deleteComplaint(item) {
     const id = complaintId(item);
     const title = complaintTitle(item);
@@ -371,6 +459,8 @@ export default function App() {
         complaintTitle(item),
         complaintDescription(item),
         complaintCategory(item),
+        complaintDepartment(item),
+        complaintAssignedTo(item),
         item.email,
       ]
         .filter(Boolean)
@@ -384,9 +474,15 @@ export default function App() {
         categoryFilter === "all" ||
         complaintCategory(item).toLowerCase() === categoryFilter.toLowerCase();
 
-      return matchesSearch && matchesStatus && matchesCategory;
+      const assigned = isComplaintAssigned(item);
+      const matchesAssignment =
+        assignmentFilter === "all" ||
+        (assignmentFilter === "assigned" && assigned) ||
+        (assignmentFilter === "awaiting" && !assigned);
+
+      return matchesSearch && matchesStatus && matchesCategory && matchesAssignment;
     });
-  }, [complaints, search, statusFilter, categoryFilter]);
+  }, [complaints, search, statusFilter, categoryFilter, assignmentFilter]);
 
   const stats = useMemo(() => {
     const open = complaints.filter((item) =>
@@ -401,10 +497,15 @@ export default function App() {
       )
     ).length;
 
+    const awaiting = complaints.filter((item) => !isComplaintAssigned(item)).length;
+    const assigned = complaints.length - awaiting;
+
     return {
       total: complaints.length,
       open,
       resolved,
+      awaiting,
+      assigned,
     };
   }, [complaints]);
 
@@ -632,7 +733,11 @@ export default function App() {
 
               <section className="stats-grid">
                 <StatCard icon="▤" label="Total complaints" value={stats.total} tone="blue" detail="Complaints in your view" />
-                <StatCard icon="◷" label="Open complaints" value={stats.open} tone="amber" detail="Awaiting resolution" />
+                {isAdmin ? (
+                  <StatCard icon="⏳" label="Awaiting assignment" value={stats.awaiting} tone="amber" detail="Pending staff dispatch" />
+                ) : (
+                  <StatCard icon="◷" label="Open complaints" value={stats.open} tone="amber" detail="Awaiting resolution" />
+                )}
                 <StatCard icon="✓" label="Resolved complaints" value={stats.resolved} tone="green" detail="Marked as resolved" />
               </section>
 
@@ -650,6 +755,7 @@ export default function App() {
                   items={[...complaints].slice(0, 5)}
                   isAdmin={isAdmin}
                   onCategoryChange={updateCategory}
+                  onAssign={openAssignModal}
                   loading={loading}
                   emptyText="No complaints yet. Your submissions will appear here."
                 />
@@ -705,12 +811,18 @@ export default function App() {
                     <option value={category} key={category}>{category}</option>
                   ))}
                 </select>
+                <select value={assignmentFilter} onChange={(event) => setAssignmentFilter(event.target.value)} aria-label="Filter by assignment status">
+                  <option value="all">All assignments</option>
+                  <option value="awaiting">Awaiting assignment</option>
+                  <option value="assigned">Assigned</option>
+                </select>
               </div>
 
               <ComplaintTable
                 items={filteredComplaints}
                 isAdmin={isAdmin}
                 onCategoryChange={updateCategory}
+                onAssign={openAssignModal}
                 onDelete={deleteComplaint}
                 allowDelete={true}
                 loading={loading}
@@ -786,6 +898,80 @@ export default function App() {
             </section>
           )}
 
+          {assigningItem && (
+            <div className="modal-overlay" role="dialog" aria-modal="true">
+              <div className="modal-card">
+                <div className="modal-header">
+                  <h3>Assign Complaint</h3>
+                  <button
+                    type="button"
+                    className="modal-close-btn"
+                    onClick={() => setAssigningItem(null)}
+                    aria-label="Close assignment dialog"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="modal-subtitle">
+                  <strong>{complaintTitle(assigningItem)}</strong>
+                  <span className="complaint-id">ID: {complaintId(assigningItem)}</span>
+                </div>
+                <form onSubmit={handleAssignSubmit} className="form-stack complaint-form">
+                  <label>
+                    Assign to Department
+                    <select
+                      value={assignmentForm.department}
+                      onChange={(event) =>
+                        setAssignmentForm({
+                          ...assignmentForm,
+                          department: event.target.value,
+                        })
+                      }
+                    >
+                      {DEPARTMENT_OPTIONS.map((dept) => (
+                        <option value={dept} key={dept}>
+                          {dept}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="field-hint">
+                      Select the department responsible for handling this complaint.
+                    </span>
+                  </label>
+                  <label>
+                    Assign to Person / Staff (Optional)
+                    <input
+                      value={assignmentForm.assignedTo}
+                      onChange={(event) =>
+                        setAssignmentForm({
+                          ...assignmentForm,
+                          assignedTo: event.target.value,
+                        })
+                      }
+                      placeholder="e.g. John Doe / Warden Smith / Electrical Lead"
+                      maxLength={100}
+                    />
+                    <span className="field-hint">
+                      Designate a specific staff member or handler.
+                    </span>
+                  </label>
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => setAssigningItem(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button className="primary-button" disabled={submitting}>
+                      {submitting ? "Saving…" : "Save assignment →"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
           <footer className="page-footer">
             <span>© {new Date().getFullYear()} CampusCare · Smart Complaint Management</span>
             <span>Made for a better campus</span>
@@ -810,7 +996,7 @@ function StatCard({ icon, label, value, tone, detail }) {
   );
 }
 
-function ComplaintTable({ items, isAdmin, onCategoryChange, onDelete, allowDelete = false, loading, emptyText }) {
+function ComplaintTable({ items, isAdmin, onCategoryChange, onAssign, onDelete, allowDelete = false, loading, emptyText }) {
   return (
     <div className="table-wrap">
       <table className="complaint-table">
@@ -819,65 +1005,92 @@ function ComplaintTable({ items, isAdmin, onCategoryChange, onDelete, allowDelet
             <th>Complaint</th>
             <th>Category</th>
             <th>Status</th>
+            <th>Assignment</th>
             <th>Date</th>
-            {isAdmin && <th>Action</th>}
+            {isAdmin && <th>Assignment</th>}
             {allowDelete && <th>Actions</th>}
           </tr>
         </thead>
         <tbody>
           {loading && items.length === 0 ? (
-            <tr><td colSpan={4 + (isAdmin ? 1 : 0) + (allowDelete ? 1 : 0)} className="empty-state">Loading complaints…</td></tr>
+            <tr><td colSpan={5 + (isAdmin ? 1 : 0) + (allowDelete ? 1 : 0)} className="empty-state">Loading complaints…</td></tr>
           ) : items.length === 0 ? (
-            <tr><td colSpan={4 + (isAdmin ? 1 : 0) + (allowDelete ? 1 : 0)} className="empty-state">{emptyText}</td></tr>
+            <tr><td colSpan={5 + (isAdmin ? 1 : 0) + (allowDelete ? 1 : 0)} className="empty-state">{emptyText}</td></tr>
           ) : (
-            items.map((item, index) => (
-              <tr key={complaintId(item) === "—" ? index : complaintId(item)}>
-                <td>
-                  <div className="complaint-cell">
-                    <span className="complaint-symbol">#</span>
-                    <div>
-                      <strong>{complaintTitle(item)}</strong>
-                      <span className="complaint-id">ID: {complaintId(item)}</span>
-                      {isAdmin && item.email && <span className="complaint-id">{item.email}</span>}
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  {isAdmin ? (
-                    <select
-                      className="category-select"
-                      value={complaintCategory(item)}
-                      onChange={(event) => onCategoryChange(item, event.target.value)}
-                      aria-label={`Change category for complaint ${complaintId(item)}`}
-                    >
-                      {!CATEGORY_OPTIONS.includes(complaintCategory(item)) && (
-                        <option value={complaintCategory(item)}>{complaintCategory(item)}</option>
-                      )}
-                      {CATEGORY_OPTIONS.map((category) => (
-                        <option value={category} key={category}>{category}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="category-text">{complaintCategory(item)}</span>
-                  )}
-                </td>
-                <td><StatusBadge status={complaintStatus(item)} /></td>
-                <td className="date-cell">{displayDate(item.createdAt ?? item.created_at ?? item.submittedAt ?? item.date)}</td>
-                {isAdmin && <td><span className="admin-action-label">Manage category</span></td>}
-                {allowDelete && (
+            items.map((item, index) => {
+              const assigned = isComplaintAssigned(item);
+              const dept = complaintDepartment(item);
+              const person = complaintAssignedTo(item);
+              return (
+                <tr key={complaintId(item) === "—" ? index : complaintId(item)}>
                   <td>
-                    <button
-                      type="button"
-                      className="delete-button"
-                      onClick={() => onDelete(item)}
-                      aria-label={`Delete complaint: ${complaintTitle(item)}`}
-                    >
-                      Delete
-                    </button>
+                    <div className="complaint-cell">
+                      <span className="complaint-symbol">#</span>
+                      <div>
+                        <strong>{complaintTitle(item)}</strong>
+                        <span className="complaint-id">ID: {complaintId(item)}</span>
+                        {isAdmin && item.email && <span className="complaint-id">{item.email}</span>}
+                      </div>
+                    </div>
                   </td>
-                )}
-              </tr>
-            ))
+                  <td>
+                    {isAdmin ? (
+                      <select
+                        className="category-select"
+                        value={complaintCategory(item)}
+                        onChange={(event) => onCategoryChange(item, event.target.value)}
+                        aria-label={`Change category for complaint ${complaintId(item)}`}
+                      >
+                        {!CATEGORY_OPTIONS.includes(complaintCategory(item)) && (
+                          <option value={complaintCategory(item)}>{complaintCategory(item)}</option>
+                        )}
+                        {CATEGORY_OPTIONS.map((category) => (
+                          <option value={category} key={category}>{category}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="category-text">{complaintCategory(item)}</span>
+                    )}
+                  </td>
+                  <td><StatusBadge status={complaintStatus(item)} /></td>
+                  <td>
+                    {assigned ? (
+                      <div className="assignment-badge assigned">
+                        <span className="assignment-dept">{dept || "Assigned"}</span>
+                        {person && <span className="assignment-person">👤 {person}</span>}
+                      </div>
+                    ) : (
+                      <span className="assignment-badge awaiting">Awaiting assignment</span>
+                    )}
+                  </td>
+                  <td className="date-cell">{displayDate(item.createdAt ?? item.created_at ?? item.submittedAt ?? item.date)}</td>
+                  {isAdmin && (
+                    <td>
+                      <button
+                        type="button"
+                        className="assign-btn"
+                        onClick={() => onAssign?.(item)}
+                        aria-label={`Assign complaint ${complaintId(item)}`}
+                      >
+                        {assigned ? "Reassign" : "Assign"}
+                      </button>
+                    </td>
+                  )}
+                  {allowDelete && (
+                    <td>
+                      <button
+                        type="button"
+                        className="delete-button"
+                        onClick={() => onDelete(item)}
+                        aria-label={`Delete complaint: ${complaintTitle(item)}`}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>
