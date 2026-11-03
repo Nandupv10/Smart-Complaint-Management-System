@@ -420,3 +420,556 @@ test('FR5 returns 404 when the complaint does not exist', async () => {
 
     assert.equal(result.statusCode, 404);
 });
+
+
+// ==================================================
+// FR7 tests: Update and resolve complaints
+// Lifecycle: Submitted -> Assigned -> In Progress -> Resolved -> Closed
+// ==================================================
+
+function createMockPoolForStatus({
+    initialStatus = 'submitted',
+    complaintExists = true,
+    failOnInsertHistory = false,
+    updateAffectedRows = 1
+} = {}) {
+    let transactionBegan = false;
+    let committed = false;
+    let rolledBack = false;
+    let released = false;
+    const executedQueries = [];
+
+    const mockConnection = {
+        beginTransaction: async () => {
+            transactionBegan = true;
+        },
+        commit: async () => {
+            committed = true;
+        },
+        rollback: async () => {
+            rolledBack = true;
+        },
+        release: () => {
+            released = true;
+        },
+        execute: async (sql, params) => {
+            executedQueries.push({ sql, params });
+
+            if (/SELECT complaint_id, status/i.test(sql)) {
+                if (!complaintExists) {
+                    return [[]];
+                }
+                return [[{ complaint_id: params[0], status: initialStatus }]];
+            }
+
+            if (/UPDATE complaints/i.test(sql)) {
+                return [{ affectedRows: updateAffectedRows }];
+            }
+
+            if (/INSERT INTO complaint_status_history/i.test(sql)) {
+                if (failOnInsertHistory) {
+                    throw new Error('Database error during history recording');
+                }
+                return [{ insertId: 1 }];
+            }
+
+            return [[]];
+        }
+    };
+
+    const mockPool = {
+        execute: async () => [[]],
+        getConnection: async () => mockConnection,
+        get state() {
+            return {
+                transactionBegan,
+                committed,
+                rolledBack,
+                released,
+                executedQueries
+            };
+        }
+    };
+
+    return mockPool;
+}
+
+// --------------------------------------------------
+// Valid Status Transitions
+// --------------------------------------------------
+
+test('FR7 allows valid transition: submitted -> assigned with remark', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'submitted' });
+
+    const result = await invokeHandler(
+        { status: 'assigned', remark: 'Assigned to maintenance department' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.responseBody.complaint.oldStatus, 'submitted');
+    assert.equal(result.responseBody.complaint.newStatus, 'assigned');
+    assert.equal(result.responseBody.complaint.complaintId, 'complaint-101');
+    assert.equal(result.responseBody.complaint.remark, 'Assigned to maintenance department');
+    assert.equal(result.responseBody.complaint.updatedBy, 'test-admin-1');
+    assert.equal(mockPool.state.transactionBegan, true);
+    assert.equal(mockPool.state.committed, true);
+    assert.equal(mockPool.state.rolledBack, false);
+    assert.equal(mockPool.state.released, true);
+});
+
+test('FR7 allows valid transition: assigned -> in_progress with remark', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'assigned' });
+
+    const result = await invokeHandler(
+        { status: 'in_progress', remark: 'Technician has started work on-site' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.responseBody.complaint.oldStatus, 'assigned');
+    assert.equal(result.responseBody.complaint.newStatus, 'in_progress');
+    assert.equal(mockPool.state.committed, true);
+    assert.equal(mockPool.state.released, true);
+});
+
+test('FR7 allows valid transition: in_progress -> resolved with resolution note remark', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'in_progress' });
+
+    const result = await invokeHandler(
+        { status: 'resolved', remark: 'Replaced faulty circuit breaker. System tested and functional.' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.responseBody.complaint.oldStatus, 'in_progress');
+    assert.equal(result.responseBody.complaint.newStatus, 'resolved');
+    assert.equal(result.responseBody.complaint.remark, 'Replaced faulty circuit breaker. System tested and functional.');
+    assert.equal(mockPool.state.committed, true);
+    assert.equal(mockPool.state.released, true);
+
+    const historyInsert = mockPool.state.executedQueries.find(q =>
+        /INSERT INTO complaint_status_history/i.test(q.sql)
+    );
+    assert.ok(historyInsert, 'history insert recorded');
+    assert.deepEqual(historyInsert.params, [
+        'complaint-101',
+        'in_progress',
+        'resolved',
+        'test-admin-1',
+        'Replaced faulty circuit breaker. System tested and functional.'
+    ]);
+});
+
+test('FR7 allows valid transition: resolved -> closed with remark', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'resolved' });
+
+    const result = await invokeHandler(
+        { status: 'closed', remark: 'Feedback received from user. Closing complaint.' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.responseBody.complaint.oldStatus, 'resolved');
+    assert.equal(result.responseBody.complaint.newStatus, 'closed');
+    assert.equal(mockPool.state.committed, true);
+    assert.equal(mockPool.state.released, true);
+});
+
+// --------------------------------------------------
+// Invalid Status Transitions (Must return 409)
+// --------------------------------------------------
+
+test('FR7 rejects invalid transition: submitted -> in_progress (bypassing assigned)', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'submitted' });
+
+    const result = await invokeHandler(
+        { status: 'in_progress', remark: 'Attempting to bypass assigned state' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from submitted to in_progress/i);
+    assert.equal(mockPool.state.committed, false);
+    assert.equal(mockPool.state.rolledBack, true);
+    assert.equal(mockPool.state.released, true);
+});
+
+test('FR7 rejects invalid transition: submitted -> resolved (direct resolve attempt)', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'submitted' });
+
+    const result = await invokeHandler(
+        { status: 'resolved', remark: 'Direct resolve attempt' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from submitted to resolved/i);
+    assert.equal(mockPool.state.committed, false);
+    assert.equal(mockPool.state.rolledBack, true);
+});
+
+test('FR7 rejects invalid transition: submitted -> closed', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'submitted' });
+
+    const result = await invokeHandler(
+        { status: 'closed', remark: 'Premature close' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from submitted to closed/i);
+});
+
+test('FR7 rejects invalid backward transition: assigned -> submitted', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'assigned' });
+
+    const result = await invokeHandler(
+        { status: 'submitted', remark: 'Move back to submitted' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from assigned to submitted/i);
+});
+
+test('FR7 rejects invalid transition: assigned -> resolved (bypassing in_progress)', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'assigned' });
+
+    const result = await invokeHandler(
+        { status: 'resolved', remark: 'Resolving without in_progress' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from assigned to resolved/i);
+});
+
+test('FR7 rejects invalid transition: assigned -> closed', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'assigned' });
+
+    const result = await invokeHandler(
+        { status: 'closed', remark: 'Closing assigned complaint directly' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from assigned to closed/i);
+});
+
+test('FR7 rejects invalid backward transition: in_progress -> submitted', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'in_progress' });
+
+    const result = await invokeHandler(
+        { status: 'submitted', remark: 'Demoting to submitted' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from in_progress to submitted/i);
+});
+
+test('FR7 rejects invalid backward transition: in_progress -> assigned', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'in_progress' });
+
+    const result = await invokeHandler(
+        { status: 'assigned', remark: 'Demoting to assigned' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from in_progress to assigned/i);
+});
+
+test('FR7 rejects invalid transition: in_progress -> closed', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'in_progress' });
+
+    const result = await invokeHandler(
+        { status: 'closed', remark: 'Closing in_progress complaint without resolution' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from in_progress to closed/i);
+});
+
+test('FR7 rejects invalid backward transition: resolved -> submitted', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'resolved' });
+
+    const result = await invokeHandler(
+        { status: 'submitted', remark: 'Reopening to submitted' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from resolved to submitted/i);
+});
+
+test('FR7 rejects invalid backward transition: resolved -> assigned', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'resolved' });
+
+    const result = await invokeHandler(
+        { status: 'assigned', remark: 'Reassigning resolved' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from resolved to assigned/i);
+});
+
+test('FR7 rejects invalid backward transition: resolved -> in_progress', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'resolved' });
+
+    const result = await invokeHandler(
+        { status: 'in_progress', remark: 'Returning to in_progress' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from resolved to in_progress/i);
+});
+
+test('FR7 rejects transitions from terminal closed status', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'closed' });
+
+    const result = await invokeHandler(
+        { status: 'resolved', remark: 'Reopening closed complaint' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from closed to resolved/i);
+});
+
+test('FR7 rejects transition to identical status', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'assigned' });
+
+    const result = await invokeHandler(
+        { status: 'assigned', remark: 'No state change' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 409);
+    assert.match(result.responseBody.error, /Invalid status transition from assigned to assigned/i);
+});
+
+// --------------------------------------------------
+// Remark Validation (Fewer than 500 characters, max 499)
+// --------------------------------------------------
+
+test('FR7 accepts boundary remark of exactly 499 characters', async () => {
+    const mockPool = createMockPoolForStatus({ initialStatus: 'submitted' });
+    const remark499 = 'r'.repeat(499);
+
+    const result = await invokeHandler(
+        { status: 'assigned', remark: remark499 },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.responseBody.complaint.remark.length, 499);
+});
+
+test('FR7 rejects boundary remark of exactly 500 characters with 400', async () => {
+    const remark500 = 'r'.repeat(500);
+
+    const result = await invokeHandler(
+        { status: 'assigned', remark: remark500 },
+        adminToken(),
+        undefined,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 400);
+    assert.match(result.responseBody.error, /must be less than 500 characters/i);
+});
+
+test('FR7 rejects remark exceeding 500 characters (501 chars) with 400', async () => {
+    const remark501 = 'r'.repeat(501);
+
+    const result = await invokeHandler(
+        { status: 'assigned', remark: remark501 },
+        adminToken(),
+        undefined,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 400);
+    assert.match(result.responseBody.error, /must be less than 500 characters/i);
+});
+
+test('FR7 rejects missing, empty, or whitespace-only remark with 400', async () => {
+    const missing = await invokeHandler(
+        { status: 'assigned' },
+        adminToken(),
+        undefined,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+    assert.equal(missing.statusCode, 400);
+
+    const empty = await invokeHandler(
+        { status: 'assigned', remark: '' },
+        adminToken(),
+        undefined,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+    assert.equal(empty.statusCode, 400);
+
+    const whitespace = await invokeHandler(
+        { status: 'assigned', remark: '   ' },
+        adminToken(),
+        undefined,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+    assert.equal(whitespace.statusCode, 400);
+});
+
+// --------------------------------------------------
+// Status Name Validation
+// --------------------------------------------------
+
+test('FR7 rejects unknown status and returns 400', async () => {
+    const result = await invokeHandler(
+        { status: 'rejected', remark: 'Rejected is not in documented lifecycle' },
+        adminToken(),
+        undefined,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 400);
+    assert.equal(result.responseBody.error, 'Invalid complaint status.');
+});
+
+// --------------------------------------------------
+// Authorization Checks
+// --------------------------------------------------
+
+test('FR7 rejects unauthenticated requests with 401', async () => {
+    const result = await invokeHandler(
+        { status: 'assigned', remark: 'No token provided' },
+        null,
+        undefined,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 401);
+});
+
+test('FR7 prevents non-admin users from updating status with 403', async () => {
+    const result = await invokeHandler(
+        { status: 'assigned', remark: 'Regular user attempt' },
+        token(),
+        undefined,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 403);
+});
+
+// --------------------------------------------------
+// Nonexistent Complaints & Transaction Rollback
+// --------------------------------------------------
+
+test('FR7 returns 404 when complaint does not exist', async () => {
+    const mockPool = createMockPoolForStatus({ complaintExists: false });
+
+    const result = await invokeHandler(
+        { status: 'assigned', remark: 'Valid remark' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/nonexistent-id/status'
+    );
+
+    assert.equal(result.statusCode, 404);
+    assert.equal(result.responseBody.error, 'Complaint not found.');
+    assert.equal(mockPool.state.committed, false);
+    assert.equal(mockPool.state.rolledBack, true);
+    assert.equal(mockPool.state.released, true);
+});
+
+test('FR7 rolls back transaction and returns 500 when history insertion fails', async () => {
+    const mockPool = createMockPoolForStatus({
+        initialStatus: 'submitted',
+        failOnInsertHistory: true
+    });
+
+    const result = await invokeHandler(
+        { status: 'assigned', remark: 'Valid remark' },
+        adminToken(),
+        mockPool,
+        'PATCH',
+        '/complaints/complaint-101/status'
+    );
+
+    assert.equal(result.statusCode, 500);
+    assert.equal(result.responseBody.error, 'Unable to update complaint status.');
+    assert.equal(mockPool.state.committed, false);
+    assert.equal(mockPool.state.rolledBack, true);
+    assert.equal(mockPool.state.released, true);
+});
