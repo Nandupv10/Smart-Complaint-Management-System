@@ -1,3 +1,4 @@
+
 const express = require('express');
 const { randomUUID } = require('node:crypto');
 const { requireAuth, requireRole } = require('./auth');
@@ -336,7 +337,8 @@ function createComplaintRouter(pool) {
             }
 
             // Validate remark.
-            // A remark is required for every status change (must be fewer than 500 characters).
+            // A remark is required for every status change
+            // and must be fewer than 500 characters.
             if (
                 typeof remark !== 'string' ||
                 !remark.trim() ||
@@ -457,6 +459,168 @@ function createComplaintRouter(pool) {
 
                 return res.status(500).json({
                     error: 'Unable to update complaint status.'
+                });
+            } finally {
+                if (connection) {
+                    connection.release();
+                }
+            }
+        }
+    );
+
+    // ==================================================
+    // FR8: User feedback after complaint resolution.
+    // ==================================================
+
+    router.post(
+        '/complaints/:id/feedback',
+        requireAuth,
+        async (req, res) => {
+            const complaintId = req.params.id;
+            const { rating, comments } = req.body || {};
+
+            // Validate complaint ID.
+            if (
+                typeof complaintId !== 'string' ||
+                !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(complaintId)
+            ) {
+                return res.status(400).json({
+                    error: 'Invalid complaint ID.'
+                });
+            }
+
+            // Rating must be an integer between 1 and 5.
+            if (
+                !Number.isInteger(rating) ||
+                rating < 1 ||
+                rating > 5
+            ) {
+                return res.status(400).json({
+                    error: 'Rating must be an integer between 1 and 5.'
+                });
+            }
+
+            // Comments are optional but must be a string
+            // containing no more than 1000 characters.
+            if (
+                comments !== undefined &&
+                comments !== null &&
+                (
+                    typeof comments !== 'string' ||
+                    comments.length > 1000
+                )
+            ) {
+                return res.status(400).json({
+                    error: 'Comments must not exceed 1000 characters.'
+                });
+            }
+
+            const normalizedComments =
+                typeof comments === 'string' && comments.trim()
+                    ? comments.trim()
+                    : null;
+
+            let connection;
+            let transactionStarted = false;
+
+            try {
+                connection = await pool.getConnection();
+
+                await connection.beginTransaction();
+                transactionStarted = true;
+
+                // Lock the complaint row while validating and saving feedback.
+                const [complaints] = await connection.execute(
+                    `SELECT complaint_id, user_id, status
+                     FROM complaints
+                     WHERE complaint_id = ?
+                     FOR UPDATE`,
+                    [complaintId]
+                );
+
+                if (complaints.length === 0) {
+                    await connection.rollback();
+                    transactionStarted = false;
+
+                    return res.status(404).json({
+                        error: 'Complaint not found.'
+                    });
+                }
+
+                const complaint = complaints[0];
+
+                // A user can submit feedback only for their own complaint.
+                if (String(complaint.user_id) !== String(req.user.id)) {
+                    await connection.rollback();
+                    transactionStarted = false;
+
+                    return res.status(403).json({
+                        error: 'You are not authorized to provide feedback for this complaint.'
+                    });
+                }
+
+                // Feedback is allowed only after resolution.
+                if (complaint.status !== 'resolved') {
+                    await connection.rollback();
+                    transactionStarted = false;
+
+                    return res.status(409).json({
+                        error: 'Feedback can only be submitted after the complaint is resolved.'
+                    });
+                }
+
+                // Save feedback. The database unique constraint
+                // ensures that each complaint receives feedback only once.
+                await connection.execute(
+                    `INSERT INTO complaint_feedback
+                        (complaint_id, user_id, rating, comments)
+                     VALUES (?, ?, ?, ?)`,
+                    [
+                        complaintId,
+                        req.user.id,
+                        rating,
+                        normalizedComments
+                    ]
+                );
+
+                await connection.commit();
+                transactionStarted = false;
+
+                return res.status(201).json({
+                    message: 'Feedback submitted successfully.',
+                    feedback: {
+                        complaintId,
+                        rating,
+                        comments: normalizedComments
+                    }
+                });
+            } catch (error) {
+                if (connection && transactionStarted) {
+                    try {
+                        await connection.rollback();
+                    } catch (rollbackError) {
+                        console.error(
+                            'FR8 transaction rollback failed:',
+                            rollbackError.message
+                        );
+                    }
+                }
+
+                // A duplicate entry means feedback already exists
+                // for this complaint.
+                if (error.code === 'ER_DUP_ENTRY') {
+                    return res.status(409).json({
+                        error: 'Feedback has already been submitted for this complaint.'
+                    });
+                }
+
+                console.error(
+                    'Failed to submit complaint feedback:',
+                    error.message
+                );
+
+                return res.status(500).json({
+                    error: 'Unable to submit feedback. Please try again.'
                 });
             } finally {
                 if (connection) {

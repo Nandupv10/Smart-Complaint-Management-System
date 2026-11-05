@@ -1,10 +1,15 @@
+
 -- ==================================================
 -- SMART COMPLAINT MANAGEMENT SYSTEM
 -- Database Schema
--- Existing tables preserved + FR7 added
+-- Existing tables preserved + FR7 + FR8
 -- ==================================================
 
+
+-- ==================================================
 -- USERS TABLE
+-- ==================================================
+
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     email VARCHAR(255) NOT NULL,
@@ -23,7 +28,10 @@ CREATE TABLE IF NOT EXISTS users (
 ) ENGINE=InnoDB;
 
 
+-- ==================================================
 -- COMPLAINTS TABLE
+-- ==================================================
+
 CREATE TABLE IF NOT EXISTS complaints (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     complaint_id CHAR(36) NOT NULL,
@@ -105,5 +113,41 @@ CREATE TABLE IF NOT EXISTS complaint_status_history (
     CONSTRAINT fk_history_admin
         FOREIGN KEY (admin_id)
         REFERENCES users(id)
+
+) ENGINE=InnoDB;
+
+
+-- ==================================================
+-- FR8: USER FEEDBACK AFTER COMPLAINT RESOLUTION
+-- ==================================================
+
+CREATE TABLE IF NOT EXISTS complaint_feedback (
+    feedback_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+
+    complaint_id CHAR(36) NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+
+    rating TINYINT UNSIGNED NOT NULL,
+    comments VARCHAR(1000) NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (feedback_id),
+
+    UNIQUE KEY uq_feedback_complaint (complaint_id),
+
+    KEY idx_feedback_user (user_id),
+
+    CONSTRAINT fk_feedback_complaint
+        FOREIGN KEY (complaint_id)
+        REFERENCES complaints(complaint_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_feedback_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id),
+
+    CONSTRAINT chk_feedback_rating
+        CHECK (rating BETWEEN 1 AND 5)
 
 ) ENGINE=InnoDB;
