@@ -245,6 +245,222 @@ function createComplaintRouter(pool) {
         }
     });
 
+    // ==================================================
+    // NFR05: Retrieve details and history of a complaint.
+    // Visible only to the complaint owner and administrators.
+    // TC10: If a user requests a complaint owned by another user,
+    // return 404 with no fields of the other user's complaint.
+    // ==================================================
+    router.get('/complaints/:id', requireAuth, async (req, res) => {
+        const complaintId = req.params.id;
+
+        if (
+            typeof complaintId !== 'string' ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(complaintId)
+        ) {
+            return res.status(400).json({
+                error: 'Invalid complaint ID.'
+            });
+        }
+
+        try {
+            const [rows] = await pool.execute(
+                `SELECT c.complaint_id, c.user_id, c.title, c.description,
+                        c.category, c.status, c.created_at, c.updated_at,
+                        u.email
+                 FROM complaints c
+                 LEFT JOIN users u ON c.user_id = u.id
+                 WHERE c.complaint_id = ?`,
+                [complaintId]
+            );
+
+            if (rows.length === 0) {
+                return res.status(404).json({
+                    error: 'Complaint not found.'
+                });
+            }
+
+            const complaint = rows[0];
+
+            // NFR05 / TC10: A complaint and its owner's personal data shall be visible
+            // only to that owner and to administrators.
+            // Return 404 when a user attempts to access another user's complaint.
+            if (req.user.role !== 'admin' && String(complaint.user_id) !== String(req.user.id)) {
+                return res.status(404).json({
+                    error: 'Complaint not found.'
+                });
+            }
+
+            // Retrieve complaint status history (TC05, Table VI).
+            const [historyRows] = await pool.execute(
+                `SELECT id, complaint_id, old_status, new_status,
+                        admin_id, remark, changed_at
+                 FROM complaint_status_history
+                 WHERE complaint_id = ?
+                 ORDER BY changed_at ASC`,
+                [complaintId]
+            );
+
+            // Retrieve complaint feedback if available.
+            const [feedbackRows] = await pool.execute(
+                `SELECT feedback_id, complaint_id, user_id,
+                        rating, comments, created_at
+                 FROM complaint_feedback
+                 WHERE complaint_id = ?`,
+                [complaintId]
+            );
+
+            return res.status(200).json({
+                complaint: {
+                    complaint_id: complaint.complaint_id,
+                    complaintId: complaint.complaint_id,
+                    title: complaint.title,
+                    description: complaint.description,
+                    category: complaint.category,
+                    status: complaint.status,
+                    created_at: complaint.created_at,
+                    updated_at: complaint.updated_at,
+                    user_id: String(complaint.user_id),
+                    email: complaint.email,
+                    user: {
+                        id: String(complaint.user_id),
+                        email: complaint.email
+                    },
+                    history: historyRows,
+                    feedback: feedbackRows[0] || null
+                }
+            });
+        } catch (error) {
+            console.error(
+                'Failed to retrieve complaint details:',
+                error.message
+            );
+
+            return res.status(500).json({
+                error: 'Unable to retrieve complaint details. Please try again.'
+            });
+        }
+    });
+
+    // NFR05: Retrieve complaint status history only for owner or administrator.
+    router.get('/complaints/:id/history', requireAuth, async (req, res) => {
+        const complaintId = req.params.id;
+
+        if (
+            typeof complaintId !== 'string' ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(complaintId)
+        ) {
+            return res.status(400).json({
+                error: 'Invalid complaint ID.'
+            });
+        }
+
+        try {
+            const [complaints] = await pool.execute(
+                `SELECT complaint_id, user_id
+                 FROM complaints
+                 WHERE complaint_id = ?`,
+                [complaintId]
+            );
+
+            if (complaints.length === 0) {
+                return res.status(404).json({
+                    error: 'Complaint not found.'
+                });
+            }
+
+            const complaint = complaints[0];
+
+            if (req.user.role !== 'admin' && String(complaint.user_id) !== String(req.user.id)) {
+                return res.status(404).json({
+                    error: 'Complaint not found.'
+                });
+            }
+
+            const [history] = await pool.execute(
+                `SELECT id, complaint_id, old_status, new_status,
+                        admin_id, remark, changed_at
+                 FROM complaint_status_history
+                 WHERE complaint_id = ?
+                 ORDER BY changed_at ASC`,
+                [complaintId]
+            );
+
+            return res.status(200).json({
+                complaintId,
+                history
+            });
+        } catch (error) {
+            console.error(
+                'Failed to retrieve complaint history:',
+                error.message
+            );
+
+            return res.status(500).json({
+                error: 'Unable to retrieve complaint history. Please try again.'
+            });
+        }
+    });
+
+    // NFR05: Retrieve complaint feedback only for owner or administrator.
+    router.get('/complaints/:id/feedback', requireAuth, async (req, res) => {
+        const complaintId = req.params.id;
+
+        if (
+            typeof complaintId !== 'string' ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(complaintId)
+        ) {
+            return res.status(400).json({
+                error: 'Invalid complaint ID.'
+            });
+        }
+
+        try {
+            const [complaints] = await pool.execute(
+                `SELECT complaint_id, user_id
+                 FROM complaints
+                 WHERE complaint_id = ?`,
+                [complaintId]
+            );
+
+            if (complaints.length === 0) {
+                return res.status(404).json({
+                    error: 'Complaint not found.'
+                });
+            }
+
+            const complaint = complaints[0];
+
+            if (req.user.role !== 'admin' && String(complaint.user_id) !== String(req.user.id)) {
+                return res.status(404).json({
+                    error: 'Complaint not found.'
+                });
+            }
+
+            const [feedbackRows] = await pool.execute(
+                `SELECT feedback_id, complaint_id, user_id,
+                        rating, comments, created_at
+                 FROM complaint_feedback
+                 WHERE complaint_id = ?`,
+                [complaintId]
+            );
+
+            return res.status(200).json({
+                complaintId,
+                feedback: feedbackRows[0] || null
+            });
+        } catch (error) {
+            console.error(
+                'Failed to retrieve complaint feedback:',
+                error.message
+            );
+
+            return res.status(500).json({
+                error: 'Unable to retrieve complaint feedback. Please try again.'
+            });
+        }
+    });
+
     // FR5: Only administrators can change complaint categories.
     router.patch(
         '/complaints/:id/category',

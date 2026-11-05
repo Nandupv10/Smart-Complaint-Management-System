@@ -246,6 +246,9 @@ The backend exposes REST API endpoints for authentication and complaint manageme
 | POST | `/auth/login` | Authenticate a user |
 | POST | `/complaints` | Submit a complaint |
 | GET | `/complaints` | Retrieve complaints |
+| GET | `/complaints/:id` | Retrieve complaint details, history & feedback |
+| GET | `/complaints/:id/history` | Retrieve complaint status history |
+| GET | `/complaints/:id/feedback` | Retrieve complaint feedback |
 | DELETE | `/complaints/:id` | Delete a complaint |
 | PATCH | `/complaints/:id/category` | Update complaint category |
 | PATCH | `/complaints/:id/status` | Update complaint status |
@@ -308,6 +311,8 @@ The repository includes supporting Software Engineering Mini-Project documentati
 Additional implementation documentation:
 
 - [NFR4 – Data Durability](docs/nfr4-data-durability.md)
+- [NFR5 – Privacy and HTTPS](docs/nfr5-privacy-and-https.md)
+- [REST API Reference](docs/api-reference.md)
 - [Sprint 1 Summary](docs/sprint1-summary.md)
 - [Sprint 2 Progress](docs/sprint2-progress.md)
 

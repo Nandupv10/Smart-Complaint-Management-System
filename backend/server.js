@@ -7,7 +7,22 @@ const responseTime = require('./responseTime');
 
 const app = express();
 
+// Trust reverse proxy (Nginx terminating TLS)
+app.set('trust proxy', 1);
+
 app.use(responseTime);
+
+// NFR05: Ensure data travels only over HTTPS.
+// When running behind reverse proxy with ENFORCE_HTTPS=true,
+// redirect plain HTTP requests to HTTPS via 301.
+app.use((req, res, next) => {
+    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    if (process.env.ENFORCE_HTTPS === 'true' && !isHttps) {
+        const host = req.headers.host || 'localhost';
+        return res.redirect(301, `https://${host}${req.originalUrl}`);
+    }
+    next();
+});
 app.use(cors({ origin: 'http://localhost:5173' }));
 
 app.disable('x-powered-by');

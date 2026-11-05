@@ -348,6 +348,142 @@ DELETE /complaints/123e4567-e89b-12d3-a456-426614174000
 
 ---
 
+### 3.4 Retrieve Complaint Details and Status History
+
+Retrieves detailed information, status change history, and feedback for a specific complaint.
+
+**Endpoint**
+
+```http
+GET /complaints/:id
+```
+
+**Authentication:** Required.
+
+**Authorization:**
+- Complaint owner can retrieve their own complaint.
+- Administrators can retrieve any complaint.
+- Other users receive **404 Not Found** (TC10) to protect privacy.
+
+**Path Parameter**
+
+| Parameter | Description |
+|---|---|
+| `id` | UUID of the complaint |
+
+**Success Response – 200 OK**
+
+```json
+{
+  "complaint": {
+    "complaintId": "123e4567-e89b-12d3-a456-426614174000",
+    "complaint_id": "123e4567-e89b-12d3-a456-426614174000",
+    "title": "Hostel water supply issue",
+    "description": "There has been no water supply since morning.",
+    "category": "Hostel",
+    "status": "in_progress",
+    "created_at": "2026-11-05T08:30:00.000Z",
+    "updated_at": "2026-11-05T10:00:00.000Z",
+    "user_id": "101",
+    "email": "user@example.com",
+    "user": {
+      "id": "101",
+      "email": "user@example.com"
+    },
+    "history": [
+      {
+        "id": 1,
+        "complaint_id": "123e4567-e89b-12d3-a456-426614174000",
+        "old_status": "submitted",
+        "new_status": "assigned",
+        "admin_id": 201,
+        "remark": "Assigned to plumbing team",
+        "changed_at": "2026-11-05T09:00:00.000Z"
+      }
+    ],
+    "feedback": null
+  }
+}
+```
+
+**Error Responses**
+
+| Status | Description |
+|---|---|
+| 400 | Invalid complaint ID format |
+| 401 | Authentication required |
+| 404 | Complaint not found or belongs to another user (TC10) |
+| 500 | Unable to retrieve complaint details |
+
+---
+
+### 3.5 Retrieve Complaint History
+
+Retrieves the lifecycle status history records for a complaint.
+
+**Endpoint**
+
+```http
+GET /complaints/:id/history
+```
+
+**Authentication:** Required.
+
+**Authorization:** Owner or Administrator only. Other users receive 404 Not Found.
+
+**Success Response – 200 OK**
+
+```json
+{
+  "complaintId": "123e4567-e89b-12d3-a456-426614174000",
+  "history": [
+    {
+      "id": 1,
+      "complaint_id": "123e4567-e89b-12d3-a456-426614174000",
+      "old_status": "submitted",
+      "new_status": "assigned",
+      "admin_id": 201,
+      "remark": "Assigned to plumbing team",
+      "changed_at": "2026-11-05T09:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+### 3.6 Retrieve Complaint Feedback
+
+Retrieves post-resolution feedback for a complaint.
+
+**Endpoint**
+
+```http
+GET /complaints/:id/feedback
+```
+
+**Authentication:** Required.
+
+**Authorization:** Owner or Administrator only. Other users receive 404 Not Found.
+
+**Success Response – 200 OK**
+
+```json
+{
+  "complaintId": "123e4567-e89b-12d3-a456-426614174000",
+  "feedback": {
+    "feedback_id": 1,
+    "complaint_id": "123e4567-e89b-12d3-a456-426614174000",
+    "user_id": 101,
+    "rating": 5,
+    "comments": "Excellent service.",
+    "created_at": "2026-11-05T12:00:00.000Z"
+  }
+}
+```
+
+---
+
 ## 4. Administrative APIs
 
 The following endpoints require an authenticated administrator account.
@@ -616,6 +752,9 @@ The configured JWT secret must contain at least 32 bytes.
 | Login | Yes | Yes |
 | Submit complaint | Yes | Yes |
 | Retrieve complaints | Own complaints | All complaints |
+| View complaint details & history | Own complaints | All complaints |
+| View complaint history | Own complaints | All complaints |
+| View complaint feedback | Own complaints | All complaints |
 | Delete complaint | Own complaints | Any complaint |
 | Update category | No | Yes |
 | Update status | No | Yes |
