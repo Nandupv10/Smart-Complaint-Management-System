@@ -1,291 +1,335 @@
-# Smart Complaint Management System(SCMS)
+# Smart Complaint Management System (SCMS)
 
-## 1. Project Overviews
+A centralized web-based platform for submitting, tracking, managing, and resolving complaints through a structured complaint lifecycle.
 
-The Smart Complaint Management System (SCMS) is a centralized web-based system for submitting, managing, tracking, and resolving complaints.
+## 1. Project Overview
 
-The system provides separate functionality for users and administrators. Users can register, submit complaints, track complaint status, and provide feedback after resolution. Administrators can view, categorize, assign, update, and resolve complaints.
+The **Smart Complaint Management System (SCMS)** is a web application designed to simplify complaint management by providing a common platform for users and administrators.
 
-The project is developed as a Software Engineering Mini-Project for applying software engineering practices including requirements engineering, system modelling, architectural design, testing, and project management.
+Users can register, log in, submit complaints, track their status, and provide feedback after resolution. Administrators can review complaints, categorize them, update their status, and manage the resolution process.
 
----
+This project is developed as a Software Engineering Mini-Project, applying software engineering principles across requirements engineering, system design, implementation, testing, and project management.
 
 ## 2. Problem Statement
 
-Traditional complaint handling processes are often manual, fragmented, and difficult to track. Users may not have a clear way to monitor the progress of a complaint, while administrators may face difficulties in organizing, assigning, and resolving complaints efficiently.
+Traditional complaint management processes can be manual, fragmented, and difficult to track. Users may lack visibility into complaint progress, while administrators may find it difficult to organize complaints and monitor their resolution.
 
-The Smart Complaint Management System provides a centralized platform where complaints can be submitted and tracked throughout their lifecycle. It also provides administrators with tools to categorize complaints, assign them to the appropriate department or authority, update their status, and maintain records of complaint activities.
+SCMS addresses these challenges through a centralized platform that maintains complaint records and supports structured complaint processing, status tracking, and post-resolution feedback.
 
----
-
-## 3. Objectives
-
-The main objectives of the system are:
+## 3. Project Objectives
 
 - Provide a centralized platform for complaint submission and management.
-- Allow users to track the status of submitted complaints.
-- Generate a unique identifier for each complaint.
-- Allow administrators to categorize and assign complaints.
-- Support complaint status updates and resolution.
-- Provide feedback and rating functionality after resolution.
-- Provide authentication and authorization for controlled system access.
-- Maintain audit logs of important system and complaint activities.
+- Generate unique identifiers for complaints.
+- Allow users to track complaint progress.
+- Enable administrators to categorize and manage complaints.
+- Maintain structured complaint status transitions.
+- Allow users to submit ratings and feedback after resolution.
+- Provide authentication and role-based authorization.
+- Maintain records of important complaint status changes.
 
----
-
-## 4. System Features
+## 4. Key Features
 
 ### User Features
-
-- User registration and login
-- Complaint submission
-- Unique complaint ID generation
-- Complaint status tracking
-- Viewing complaint information
-- Providing feedback and rating after resolution
+- User registration and login.
+- Complaint submission.
+- Unique complaint ID generation.
+- Complaint status tracking.
+- Viewing complaint information.
+- Feedback and rating submission after resolution.
 
 ### Administrator Features
-
-- Administrator login
-- View submitted complaints
-- Categorize complaints
-- Assign complaints to the relevant department or authority
-- Update complaint status
-- Resolve complaints
-- View feedback and reports
+- Administrator authentication.
+- Viewing submitted complaints.
+- Complaint categorization.
+- Complaint status management.
+- Complaint resolution workflow.
 
 ### Security and Accountability
+- JWT-based authentication.
+- Role-based authorization.
+- Password hashing.
+- Complaint ownership validation.
+- Complaint status history.
+- Duplicate feedback prevention.
 
-- Authentication and authorization
-- Role-based access control
-- Audit logging of important user and complaint activities
+## 5. Technology Stack
 
----
-
-## 5. System Workflow
-
-The general complaint workflow is:
-
-1. User registers or logs into the system.
-2. User submits a complaint.
-3. The system generates a unique complaint ID.
-4. The complaint is stored and made available for administrative processing.
-5. Administrator reviews and categorizes the complaint.
-6. The complaint is assigned to the relevant department or authority.
-7. The complaint status is updated as work progresses.
-8. The complaint is marked as resolved after completion.
-9. The user can provide feedback and a rating.
-10. Relevant actions are maintained in the audit log.
-
----
+| Layer | Technologies |
+|---|---|
+| Frontend | React 19, Vite, JavaScript, CSS |
+| Backend | Node.js, Express.js |
+| Database | MySQL |
+| Database Driver | mysql2 |
+| Authentication | JSON Web Tokens (JWT) |
+| Password Security | bcrypt |
+| Testing | Node.js built-in test runner |
+| Version Control | Git and GitHub |
 
 ## 6. System Architecture
 
-The system follows a layered architecture consisting of:
+SCMS follows a layered web application architecture.
 
-### Presentation Layer
+1. **Presentation Layer:** React-based user interface.
+2. **Application Layer:** Express.js backend handling authentication, complaint operations, status management, and feedback.
+3. **Data Layer:** MySQL database storing users, complaints, complaint status history, and feedback.
 
-Provides the interfaces through which users and administrators interact with the system.
+### Architecture Diagram
 
-Components include:
+![Smart Complaint Management System Architecture](Smart%20Complaint%20System%20Architecture.png)
 
-- User Web Interface
-- Administrator Web Interface
-
-### Application / Business Layer
-
-Contains the main system services and business logic.
-
-Components include:
-
-- Authentication and Authorization
-- Complaint Management
-- Complaint Categorization and Assignment
-- Status Tracking and Resolution
-- Feedback and Rating
-- Audit Logging
-
-### Data Layer
-
-Responsible for storing and retrieving system information.
-
-The main data categories include:
-
-- User Data
-- Complaint Data
-- Feedback Data
-- Audit Log Data
-
-The architecture provides separation of concerns between the user interface, application logic, and data storage.
-
----
-
-## 7. UML and System Models
-
-The repository contains the following system modelling and design documents:
-
-- Actor Identification
-- Use Case Model
-- UML Use Case Diagram
-- Architecture Diagram
-- Component Diagram
-- Sequence Diagram
-- Other design documents required for the project
-
-Refer to the `Architecture` and `Design` folders for the corresponding diagrams.
-
----
-
-## 8. Requirements Engineering
-
-The requirements documentation contains:
-
-- Problem Statement Analysis
-- Software Requirements Specification (SRS)
-- Functional Requirements
-- Non-Functional Requirements
-- Requirements Validation
-- Requirements Traceability Matrix (RTM)
-
-The requirements documents are maintained in the `RE` folder.
-
----
-
-## 9. Testing
-
-Testing activities are documented as part of the mini-project.
-
-The testing documentation includes:
-
-- Test Plan
-- Test Cases
-- Functional Testing
-- Test execution results
-- Bug identification
-- Bug fixing and retesting
-
-The relevant documents and screenshots are maintained in the `Test_Planning` and `Testing` folders.
-
-For NFR04 reliable storage, transactional-storage design, secure daily MySQL backups, seven-day retention, restoration guidance, and TC14 verification steps, see [NFR04 data durability documentation](docs/nfr4-data-durability.md).
-
----
-
-## 10. Project Management
-
-Project development and task management are documented using GitHub and Jira.
-
-The project management documentation includes:
-
-- Project creation screenshots
-- GitHub repository activity
-- Jira project configuration
-- Scrum / Sprint activities
-- Task and issue tracking
-- Relevant screenshots
-
-These materials are maintained in the project management folder.
-
----
-
-## 11. GitHub Copilot / AI-Assisted Development
-
-The project includes documentation of the use of GitHub Copilot or other approved AI-assisted development tools where applicable.
-
-The documentation contains:
-
-- Screenshots of AI-assisted development
-- Relevant repository/code references
-- Description of the development task for which the tool was used
-
-The corresponding evidence is maintained in the `GitHub_Copilot` folder.
-
----
-
-## 12. Software Testing Tool Practice
-
-The repository contains documentation related to software testing tool practice.
-
-The process includes:
-
-1. Identifying a software defect or required modification.
-2. Using an AI-assisted or vibe-coding approach to investigate the issue.
-3. Applying the required fix or patch.
-4. Retesting the application.
-5. Recording the result.
-
-The relevant repository links, screenshots, and testing evidence are maintained in the `Software_Testing` folder.
-
----
-
-## 13. Deployment and Environment Setup
-
-Deployment documentation contains the steps required to configure and run the project.
-
-This section includes:
-
-- Development environment requirements
-- Software dependencies
-- Configuration steps
-- Environment variables, where applicable
-- Application execution steps
-- Deployment configuration
-- Deployment screenshots or references
-
-The detailed deployment documentation is maintained in the `Deployment` folder.
-
----
-
-## 14. Repository Structure
-
-The repository is organized according to the Software Engineering Mini-Project submission requirements.
+## 7. Repository Structure
 
 ```text
 Smart-Complaint-Management-System/
 │
+├── backend/
+│   ├── auth.js
+│   ├── authRoutes.js
+│   ├── complaintRoutes.js
+│   ├── db.js
+│   ├── responseTime.js
+│   ├── schema.sql
+│   ├── server.js
+│   ├── package.json
+│   └── *.test.js
+│
+├── frontend/
+│   ├── public/
+│   ├── src/
+│   │   ├── assets/
+│   │   ├── App.jsx
+│   │   ├── App.css
+│   │   ├── index.css
+│   │   └── main.jsx
+│   ├── package.json
+│   └── README.md
+│
+├── docs/
+│   ├── nfr4-data-durability.md
+│   ├── sprint1-summary.md
+│   └── sprint2-progress.md
+│
+├── scripts/
+│
+├── .github/
+│
 ├── README.md
-│
-├── 01_SRS_WorkBreakdown/
-│   ├── SRS
-│   └── Work Breakdown
-│
-├── 02_Test_Planning/
-│   ├── Test Plan
-│   └── Test Cases
-│
-├── 03_RE/
-│   ├── Functional Requirements
-│   ├── Non-Functional Requirements
-│   └── Requirements Traceability Matrix
-│
-├── 04_Architecture_Design/
-│   ├── Architecture Diagram
-│   ├── Architectural Pattern
-│   ├── Component Diagram
-│   ├── Sequence Diagram
-│   ├── Use Case Diagram
-│   └── API / Design Documentation
-│
-├── 05_Project_Management/
-│   ├── GitHub Screenshots
-│   └── Jira Scrum / Sprint Screenshots
-│
-├── 06_GitHub_Copilot/
-│   ├── Screenshots
-│   └── Repository / Code References
-│
-├── 07_Software_Testing/
-│   ├── Bug Details
-│   ├── Fix / Patch
-│   ├── Retesting
-│   └── Evidence
-│
-├── 08_Deployment/
-│   ├── Environment Setup
-│   ├── Installation Steps
-│   └── Deployment Details
-│
-└── 09_Demo/
-    ├── Demo Video
-    └── Output Screenshots
+├── Smart Complaint System Architecture.png
+└── Project documentation PDFs
 ```
 
+## 8. Database Design
+
+The application uses MySQL for persistent data storage.
+
+The main database tables are:
+
+| Table | Description |
+|---|---|
+| `users` | Stores user accounts, authentication details, and roles. |
+| `complaints` | Stores complaint information, ownership, category, and status. |
+| `complaint_status_history` | Maintains records of complaint status transitions and administrator remarks. |
+| `complaint_feedback` | Stores post-resolution ratings and optional comments. |
+
+The database schema is available at [`backend/schema.sql`](backend/schema.sql).
+
+## 9. Prerequisites
+
+Install the following before running the application:
+
+- Node.js 20 or later.
+- npm.
+- MySQL Server.
+- Git.
+
+## 10. Installation and Setup
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/Nandupv10/Smart-Complaint-Management-System.git
+cd Smart-Complaint-Management-System
+```
+
+### Step 2: Configure the Database
+
+Start MySQL and create a database:
+
+```sql
+CREATE DATABASE scms_nfr3_test;
+```
+
+Import the schema from the backend directory:
+
+```bash
+mysql -u root -p scms_nfr3_test < backend/schema.sql
+```
+
+Replace the database name with your preferred database name if required.
+
+### Step 3: Configure Backend Environment Variables
+
+Navigate to the backend:
+
+```bash
+cd backend
+```
+
+Create a `.env` file in the `backend` directory:
+
+```env
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+DB_NAME=scms_nfr3_test
+JWT_SECRET=replace_with_a_secure_random_secret_at_least_32_bytes_long
+PORT=3000
+```
+
+Use your own MySQL credentials and a secure JWT secret. Do not commit the `.env` file.
+
+### Step 4: Install Backend Dependencies
+
+From the `backend` directory:
+
+```bash
+npm install
+```
+
+### Step 5: Start the Backend
+
+```bash
+npm start
+```
+
+The backend runs on:
+
+```text
+http://localhost:3000
+```
+
+The health endpoint is available at:
+
+```text
+http://localhost:3000/health
+```
+
+### Step 6: Install Frontend Dependencies
+
+Open another terminal at the repository root:
+
+```bash
+cd frontend
+npm install
+```
+
+### Step 7: Start the Frontend
+
+```bash
+npm run dev
+```
+
+The Vite development server normally runs at:
+
+```text
+http://localhost:5173
+```
+
+## 11. API Overview
+
+The backend exposes REST API endpoints for authentication and complaint management.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/auth/register` | Register a user |
+| POST | `/auth/login` | Authenticate a user |
+| POST | `/complaints` | Submit a complaint |
+| GET | `/complaints` | Retrieve complaints |
+| DELETE | `/complaints/:id` | Delete a complaint |
+| PATCH | `/complaints/:id/category` | Update complaint category |
+| PATCH | `/complaints/:id/status` | Update complaint status |
+| POST | `/complaints/:id/feedback` | Submit post-resolution feedback |
+| GET | `/health` | Check backend health |
+
+Protected endpoints require appropriate authentication and authorization.
+
+## 12. Complaint Lifecycle
+
+The complaint status workflow is:
+
+```text
+Submitted
+    ↓
+Assigned
+    ↓
+In Progress
+    ↓
+Resolved
+    ↓
+Closed
+```
+
+Users can submit feedback after a complaint reaches the `resolved` status.
+
+Each complaint can receive feedback only once.
+
+## 13. Running Tests
+
+Backend automated tests use Node.js's built-in test runner.
+
+Navigate to the backend:
+
+```bash
+cd backend
+```
+
+Run the complete test suite:
+
+```bash
+npm test
+```
+
+The test suite covers authentication, complaint operations, status management, feedback submission, and other backend functionality.
+
+## 14. Project Documentation
+
+The repository includes supporting Software Engineering Mini-Project documentation:
+
+- Software Requirements Specification (SRS).
+- Problem Statement Analysis.
+- Functional Requirements and Validation.
+- Requirements Traceability Matrix.
+- Actor Identification.
+- Use Case Model and Diagram.
+- Test Plan, Architecture Design, and Test Cases.
+- System Architecture Diagram.
+
+Additional implementation documentation:
+
+- [NFR4 – Data Durability](docs/nfr4-data-durability.md)
+- [Sprint 1 Summary](docs/sprint1-summary.md)
+- [Sprint 2 Progress](docs/sprint2-progress.md)
+
+Refer to the project PDFs in the repository root for the detailed requirements and design deliverables.
+
+## 15. Contribution Workflow
+
+Contributions are managed through GitHub.
+
+The general workflow is:
+
+1. Create a feature branch from `main`.
+2. Implement the assigned functionality.
+3. Add or update automated tests.
+4. Run the test suite.
+5. Commit changes with a descriptive commit message.
+6. Push the feature branch.
+7. Open a pull request for review.
+8. Merge after approval and successful checks.
+
+## 16. Project Team
+
+Developed as a collaborative Software Engineering Mini-Project.
+
+For contributions, issues, and project discussions, visit the [GitHub Repository](https://github.com/Nandupv10/Smart-Complaint-Management-System).
