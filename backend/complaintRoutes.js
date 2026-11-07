@@ -1,28 +1,17 @@
-
 const express = require('express');
 const { randomUUID } = require('node:crypto');
 const { requireAuth, requireRole } = require('./auth');
 
+const {
+    ALLOWED_CATEGORIES,
+    VALID_STATUSES,
+    ALLOWED_STATUS_TRANSITIONS
+} = require('./constants/complaintConstants');
+
+const { isValidComplaintId } = require('./utils/complaintValidation');
+
 function createComplaintRouter(pool) {
     const router = express.Router();
-
-    const allowedCategories = [
-        'Infrastructure',
-        'Hostel',
-        'Maintenance',
-        'Cleanliness',
-        'IT Support',
-        'Academics',
-        'Other'
-    ];
-
-    const validStatuses = [
-        'submitted',
-        'assigned',
-        'in_progress',
-        'resolved',
-        'closed'
-    ];
 
     // FR2 / FR3: Submit a complaint.
     router.post('/complaints', requireAuth, async (req, res) => {
@@ -54,7 +43,7 @@ function createComplaintRouter(pool) {
             typeof category !== 'string' ||
             (
                 category !== 'Uncategorized' &&
-                !allowedCategories.includes(category)
+                !ALLOWED_CATEGORIES.includes(category)
             )
         ) {
             return res.status(400).json({
@@ -101,10 +90,7 @@ function createComplaintRouter(pool) {
     router.delete('/complaints/:id', requireAuth, async (req, res) => {
         const complaintId = req.params.id;
 
-        if (
-            typeof complaintId !== 'string' ||
-            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(complaintId)
-        ) {
+        if (!isValidComplaintId(complaintId)) {
             return res.status(400).json({
                 error: 'Invalid complaint ID.'
             });
@@ -156,7 +142,7 @@ function createComplaintRouter(pool) {
     router.get('/complaints', requireAuth, async (req, res) => {
         const { status, category, startDate, endDate } = req.query;
 
-        if (status && !validStatuses.includes(status)) {
+        if (status && !VALID_STATUSES.includes(status)) {
             return res.status(400).json({
                 error: 'Invalid status filter.'
             });
@@ -254,10 +240,7 @@ function createComplaintRouter(pool) {
     router.get('/complaints/:id', requireAuth, async (req, res) => {
         const complaintId = req.params.id;
 
-        if (
-            typeof complaintId !== 'string' ||
-            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(complaintId)
-        ) {
+        if (!isValidComplaintId(complaintId)) {
             return res.status(400).json({
                 error: 'Invalid complaint ID.'
             });
@@ -282,10 +265,13 @@ function createComplaintRouter(pool) {
 
             const complaint = rows[0];
 
-            // NFR05 / TC10: A complaint and its owner's personal data shall be visible
-            // only to that owner and to administrators.
+            // NFR05 / TC10: A complaint and its owner's personal data
+            // shall be visible only to that owner and to administrators.
             // Return 404 when a user attempts to access another user's complaint.
-            if (req.user.role !== 'admin' && String(complaint.user_id) !== String(req.user.id)) {
+            if (
+                req.user.role !== 'admin' &&
+                String(complaint.user_id) !== String(req.user.id)
+            ) {
                 return res.status(404).json({
                     error: 'Complaint not found.'
                 });
@@ -346,10 +332,7 @@ function createComplaintRouter(pool) {
     router.get('/complaints/:id/history', requireAuth, async (req, res) => {
         const complaintId = req.params.id;
 
-        if (
-            typeof complaintId !== 'string' ||
-            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(complaintId)
-        ) {
+        if (!isValidComplaintId(complaintId)) {
             return res.status(400).json({
                 error: 'Invalid complaint ID.'
             });
@@ -371,7 +354,10 @@ function createComplaintRouter(pool) {
 
             const complaint = complaints[0];
 
-            if (req.user.role !== 'admin' && String(complaint.user_id) !== String(req.user.id)) {
+            if (
+                req.user.role !== 'admin' &&
+                String(complaint.user_id) !== String(req.user.id)
+            ) {
                 return res.status(404).json({
                     error: 'Complaint not found.'
                 });
@@ -406,10 +392,7 @@ function createComplaintRouter(pool) {
     router.get('/complaints/:id/feedback', requireAuth, async (req, res) => {
         const complaintId = req.params.id;
 
-        if (
-            typeof complaintId !== 'string' ||
-            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(complaintId)
-        ) {
+        if (!isValidComplaintId(complaintId)) {
             return res.status(400).json({
                 error: 'Invalid complaint ID.'
             });
@@ -431,7 +414,10 @@ function createComplaintRouter(pool) {
 
             const complaint = complaints[0];
 
-            if (req.user.role !== 'admin' && String(complaint.user_id) !== String(req.user.id)) {
+            if (
+                req.user.role !== 'admin' &&
+                String(complaint.user_id) !== String(req.user.id)
+            ) {
                 return res.status(404).json({
                     error: 'Complaint not found.'
                 });
@@ -522,7 +508,6 @@ function createComplaintRouter(pool) {
     // ==================================================
     // FR7: Admin updates or resolves a complaint.
     // ==================================================
-
     router.patch(
         '/complaints/:id/status',
         requireAuth,
@@ -532,20 +517,11 @@ function createComplaintRouter(pool) {
             const { status, remark } = req.body || {};
             const adminId = req.user.id;
 
-            // Allowed transitions along documented lifecycle:
-            // Submitted -> Assigned -> In Progress -> Resolved -> Closed
-            const allowedTransitions = {
-                submitted: ['assigned'],
-                assigned: ['in_progress'],
-                in_progress: ['resolved'],
-                resolved: ['closed'],
-                closed: []
-            };
-
+            // Allowed transitions are defined centrally in complaintConstants.js.
             // Validate status.
             if (
                 typeof status !== 'string' ||
-                !validStatuses.includes(status)
+                !VALID_STATUSES.includes(status)
             ) {
                 return res.status(400).json({
                     error: 'Invalid complaint status.'
@@ -596,7 +572,9 @@ function createComplaintRouter(pool) {
                 const oldStatus = complaints[0].status;
 
                 // Check whether the requested transition is allowed.
-                if (!allowedTransitions[oldStatus]?.includes(status)) {
+                if (
+                    !ALLOWED_STATUS_TRANSITIONS[oldStatus]?.includes(status)
+                ) {
                     await connection.rollback();
                     transactionStarted = false;
 
@@ -687,7 +665,6 @@ function createComplaintRouter(pool) {
     // ==================================================
     // FR8: User feedback after complaint resolution.
     // ==================================================
-
     router.post(
         '/complaints/:id/feedback',
         requireAuth,
@@ -696,10 +673,7 @@ function createComplaintRouter(pool) {
             const { rating, comments } = req.body || {};
 
             // Validate complaint ID.
-            if (
-                typeof complaintId !== 'string' ||
-                !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(complaintId)
-            ) {
+            if (!isValidComplaintId(complaintId)) {
                 return res.status(400).json({
                     error: 'Invalid complaint ID.'
                 });
@@ -766,7 +740,9 @@ function createComplaintRouter(pool) {
                 const complaint = complaints[0];
 
                 // A user can submit feedback only for their own complaint.
-                if (String(complaint.user_id) !== String(req.user.id)) {
+                if (
+                    String(complaint.user_id) !== String(req.user.id)
+                ) {
                     await connection.rollback();
                     transactionStarted = false;
 
