@@ -30,3 +30,6 @@ dist-ssr/
 Thumbs.db
 .vscode/
 .idea/
+
+# Test coverage output
+coverage/
